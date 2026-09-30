@@ -210,4 +210,92 @@ router.get('/file', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/ide/symbols
+ * Extracts all symbol definitions (functions, classes, constants) across the codebase
+ * to power Cmd+Click / Go-to-Definition navigation.
+ */
+router.get('/symbols', async (req, res) => {
+  try {
+    const symbols = [];
+
+    // Special SuiteScript virtual module shortcuts
+    symbols.push(
+      { name: 'N/record', file: 'server/netsuite-mock/nRecord.js', line: 1, kind: 'module', preview: "Mock NetSuite 'N/record' SuiteScript 2.1 module" },
+      { name: 'N/search', file: 'server/netsuite-mock/nSearch.js', line: 1, kind: 'module', preview: "Mock NetSuite 'N/search' SuiteScript 2.1 module" }
+    );
+
+    for (const fileMeta of PROJECT_FILES) {
+      if (!fileMeta.path.endsWith('.js')) continue;
+
+      const fullPath = path.resolve(PROJECT_ROOT, fileMeta.path);
+      const content = await fs.readFile(fullPath, 'utf-8');
+      const lines = content.split('\n');
+
+      lines.forEach((lineText, idx) => {
+        const lineNum = idx + 1;
+        const trimmed = lineText.trim();
+
+        // 1. Functions: export function name( / function name( / async function name(
+        const fnMatch = trimmed.match(/^(?:export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_$]+)/);
+        if (fnMatch) {
+          symbols.push({
+            name: fnMatch[1],
+            file: fileMeta.path,
+            line: lineNum,
+            kind: 'function',
+            preview: trimmed
+          });
+          return;
+        }
+
+        // 2. Classes: export class Name / class Name
+        const clsMatch = trimmed.match(/^(?:export\s+)?class\s+([A-Za-z0-9_$]+)/);
+        if (clsMatch) {
+          symbols.push({
+            name: clsMatch[1],
+            file: fileMeta.path,
+            line: lineNum,
+            kind: 'class',
+            preview: trimmed
+          });
+          return;
+        }
+
+        // 3. Exported Constants: export const Name =
+        const constMatch = trimmed.match(/^export\s+(?:const|let|var)\s+([A-Za-z0-9_$]+)/);
+        if (constMatch) {
+          symbols.push({
+            name: constMatch[1],
+            file: fileMeta.path,
+            line: lineNum,
+            kind: 'const',
+            preview: trimmed
+          });
+          return;
+        }
+
+        // 4. Router definitions: const router = express.Router()
+        const routerMatch = trimmed.match(/^(?:export\s+)?const\s+([A-Za-z0-9_$]+)\s*=\s*(?:express\.Router|new\s+[A-Za-z0-9_$]+)/);
+        if (routerMatch && !['router', 'app'].includes(routerMatch[1])) {
+          symbols.push({
+            name: routerMatch[1],
+            file: fileMeta.path,
+            line: lineNum,
+            kind: 'instance',
+            preview: trimmed
+          });
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      symbols
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;

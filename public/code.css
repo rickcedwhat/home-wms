@@ -83,9 +83,111 @@ body {
   color: #fff;
 }
 
+.nav-history {
+  display: flex;
+  gap: 2px;
+}
+
+.btn-hist {
+  background: #21262d;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.8rem;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-hist:hover:not(:disabled) {
+  background: #30363d;
+  color: #fff;
+}
+
+.btn-hist:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
 .crumb-text {
   font-size: 0.75rem;
   color: var(--text-muted);
+}
+
+.cmd-click-badge {
+  font-size: 0.65rem;
+  background: rgba(88, 166, 255, 0.12);
+  border: 1px solid rgba(88, 166, 255, 0.25);
+  color: #79c0ff;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+}
+
+/* Floating Navigation Tooltip */
+.def-tooltip {
+  position: fixed;
+  background: #1c2128;
+  border: 1px solid #388bfd;
+  color: #e6edf3;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  pointer-events: none;
+  z-index: 1000;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  display: none;
+  transform: translate(12px, 12px);
+  white-space: nowrap;
+}
+
+.def-tooltip .tooltip-action {
+  color: var(--amber);
+  font-weight: 700;
+}
+
+.def-tooltip .tooltip-target {
+  color: #58a6ff;
+  font-weight: 600;
+}
+
+/* Modifier Active State in Code Viewport */
+.nav-clickable {
+  transition: color 0.1s, text-decoration 0.1s;
+}
+
+.is-cmd-down .nav-clickable {
+  cursor: pointer !important;
+}
+
+.is-cmd-down .nav-clickable:hover {
+  text-decoration: underline !important;
+  color: #58a6ff !important;
+  background: rgba(56, 139, 253, 0.2) !important;
+  border-radius: 2px;
+}
+
+/* Flash animation for navigated line */
+.line-highlight-flash {
+  animation: lineGlow 1.8s ease-out forwards;
+}
+
+@keyframes lineGlow {
+  0% {
+    background-color: rgba(56, 139, 253, 0.45);
+    box-shadow: inset 3px 0 0 #58a6ff;
+  }
+  70% {
+    background-color: rgba(56, 139, 253, 0.2);
+    box-shadow: inset 3px 0 0 #58a6ff;
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
 }
 
 .header-right {

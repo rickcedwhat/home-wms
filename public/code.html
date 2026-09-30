@@ -22,7 +22,12 @@
           <span class="brand-box">RF</span>
           <span class="brand-title">Code Studio</span>
         </div>
+        <div class="nav-history">
+          <button class="btn-hist font-mono" id="btnNavBack" title="Navigate Back" disabled>&larr;</button>
+          <button class="btn-hist font-mono" id="btnNavForward" title="Navigate Forward" disabled>&rarr;</button>
+        </div>
         <span class="crumb-text font-mono" id="breadcrumbDisplay">RFSmart</span>
+        <span class="cmd-click-badge font-mono">⌘-Click to navigate</span>
       </div>
 
       <div class="header-right">
@@ -33,6 +38,11 @@
         </a>
       </div>
     </header>
+
+    <!-- Definition Hover Tooltip -->
+    <div id="defTooltip" class="def-tooltip font-mono">
+      <span class="tooltip-action">⌘+Click</span> to jump to <span id="tooltipTarget" class="tooltip-target"></span>
+    </div>
 
     <!-- Workspace -->
     <div class="ide-workspace">
