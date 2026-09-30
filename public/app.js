@@ -115,9 +115,85 @@ function ScannerViewModel() {
   self.inventoryList = ko.observableArray([]);
   self.transferHistory = ko.observableArray([]);
   self.telemetryLogs = ko.observableArray([]);
-  self.allWarehouseBins = ko.observableArray([
-    'BIN-A01', 'BIN-A02', 'BIN-B01', 'BIN-B02', 'BIN-B04', 'BIN-C01', 'BIN-C02', 'BIN-STAGE'
+  
+  self.allWarehouseBinsData = ko.observableArray([
+    { binnumber: 'BIN-A01', aisle: 'A', zone: 'Receiving Staging' },
+    { binnumber: 'BIN-A02', aisle: 'A', zone: 'Bulk Storage' },
+    { binnumber: 'BIN-B01', aisle: 'B', zone: 'Fast-Pick Front' },
+    { binnumber: 'BIN-B02', aisle: 'B', zone: 'Fast-Pick Mid' },
+    { binnumber: 'BIN-B04', aisle: 'B', zone: 'High-Rack Storage' },
+    { binnumber: 'BIN-C01', aisle: 'C', zone: 'Replenishment' },
+    { binnumber: 'BIN-C02', aisle: 'C', zone: 'Reserve Pallets' },
+    { binnumber: 'BIN-STAGE', aisle: 'STAGE', zone: 'Shipping Dock' }
   ]);
+
+  self.allWarehouseBins = ko.computed(function() {
+    return self.allWarehouseBinsData().map(b => b.binnumber);
+  });
+
+  // Track Open/Close state per bin
+  self.binOpenMap = {};
+  self.getBinOpenState = function(binId) {
+    if (!self.binOpenMap[binId]) {
+      // Bins are open by default so items are visible immediately
+      self.binOpenMap[binId] = ko.observable(true);
+    }
+    return self.binOpenMap[binId];
+  };
+
+  self.toggleBin = function(bin) {
+    const obs = self.getBinOpenState(bin.binId);
+    obs(!obs());
+  };
+
+  self.expandAllBins = function() {
+    self.allWarehouseBinsData().forEach(b => {
+      self.getBinOpenState(b.binnumber)(true);
+    });
+  };
+
+  self.collapseAllBins = function() {
+    self.allWarehouseBinsData().forEach(b => {
+      self.getBinOpenState(b.binnumber)(false);
+    });
+  };
+
+  // Helper for item icons
+  self.getItemIcon = function(sku) {
+    if (sku === 'SKU-1001') return '📱';
+    if (sku === 'SKU-1002') return '📦';
+    if (sku === 'SKU-1003') return '🔫';
+    if (sku === 'SKU-1004') return '🏷️';
+    return '📦';
+  };
+
+  // Warehouse Rack: joins bins and live inventory balances
+  self.warehouseRack = ko.computed(function() {
+    const bins = self.allWarehouseBinsData();
+    const inv = self.inventoryList();
+
+    return bins.map(bin => {
+      const itemsInBin = inv.filter(row => row.bin_id === bin.binnumber && row.qty_on_hand > 0);
+      const totalUnits = itemsInBin.reduce((sum, item) => sum + Number(item.qty_on_hand), 0);
+      const openObs = self.getBinOpenState(bin.binnumber);
+
+      return {
+        binId: bin.binnumber,
+        aisle: bin.aisle,
+        zone: bin.zone,
+        items: itemsInBin,
+        totalUnits: totalUnits,
+        itemCount: itemsInBin.length,
+        isOpen: openObs,
+        isTarget: ko.computed(function() {
+          return self.toBin() === bin.binnumber;
+        }),
+        isSource: ko.computed(function() {
+          return self.fromBin() === bin.binnumber;
+        })
+      };
+    });
+  });
 
   // Middleware cache stats
   self.cacheStats = ko.observable({
@@ -230,6 +306,28 @@ function ScannerViewModel() {
       return false;
     }
     return true;
+  };
+
+  self.selectItemFromBin = function(item, binId) {
+    self.scannedBarcode(item.sku);
+    self.fromBin(binId);
+    self.executeLookup();
+    if (self.soundEnabled()) scannerAudio.playSuccess();
+    self.showFeedback(`Selected ${item.sku} from ${binId}`, 'info', 2500);
+  };
+
+  self.setDestinationBin = function(binId) {
+    if (!self.selectedItem()) {
+      self.showFeedback('Scan or select an item first before choosing destination bin', 'error', 2500);
+      return;
+    }
+    if (self.fromBin() === binId) {
+      self.showFeedback(`Cannot transfer to same source bin (${binId})`, 'error', 2500);
+      return;
+    }
+    self.toBin(binId);
+    self.showFeedback(`Destination set to ${binId}`, 'info', 2500);
+    if (self.soundEnabled()) scannerAudio.playSuccess();
   };
 
   self.scanWarehouseBarcode = function(barcode) {

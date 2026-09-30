@@ -30,7 +30,7 @@
       </div>
     </header>
 
-    <!-- Main Workspace: Mobile Scanner on Left, Real-World Warehouse on Right -->
+    <!-- Main Workspace: Mobile Scanner on Left, Vertical Warehouse Bins on Right -->
     <main class="sim-grid">
       
       <!-- ============================================================== -->
@@ -66,7 +66,7 @@
             <div class="scan-bar-container">
               <label for="barcodeInput" class="scan-bar-label">
                 <span>BARCODE INPUT</span>
-                <span class="label-hint">Physical Scanner Ready</span>
+                <span class="label-hint">Ready to Scan</span>
               </label>
               <div class="scan-bar-input-group">
                 <svg class="scan-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -98,7 +98,7 @@
               
               <!-- Available Bins for this Item -->
               <div class="item-locations">
-                <span class="section-label">SELECT SOURCE BIN:</span>
+                <span class="section-label">SOURCE BIN:</span>
                 <div class="source-bins-list" data-bind="foreach: bins">
                   <button class="bin-select-btn font-mono" data-bind="click: function() { $root.selectSourceBin(bin_id); }, css: { 'selected': $root.fromBin() === bin_id }">
                     <span class="bin-num" data-bind="text: bin_id"></span>
@@ -152,8 +152,8 @@
             <!-- ko ifnot: selectedItem -->
             <div class="scanner-idle-placeholder">
               <div class="laser-reticle">⌖</div>
-              <h3>Awaiting Barcode Scan</h3>
-              <p>Aim handheld at a physical item or shelf tag in the warehouse on the right to scan.</p>
+              <h3>Ready to Scan</h3>
+              <p>Click any square item package in the warehouse racks on the right to scan it into this device.</p>
             </div>
             <!-- /ko -->
 
@@ -162,261 +162,102 @@
       </section>
 
       <!-- ============================================================== -->
-      <!-- RIGHT: PHYSICAL WAREHOUSE FLOOR (Real-world items to scan)    -->
+      <!-- RIGHT: VERTICAL STORAGE BINS & REAL-WORLD INVENTORY            -->
       <!-- ============================================================== -->
       <section class="warehouse-section">
         
-        <!-- Warehouse Navigation / View Tabs -->
+        <!-- Warehouse Navigation / Header Bar -->
         <div class="wh-nav-bar">
           <div class="wh-nav-left">
-            <span class="warehouse-tag">📍 LOCATION: EAST WAREHOUSE (LOC-EAST-WH)</span>
+            <span class="warehouse-tag">📍 EAST WAREHOUSE RACK (LOC-EAST-WH)</span>
           </div>
           <div class="wh-nav-tabs">
             <button class="wh-tab-btn" data-bind="click: function() { activeViewTab('items'); }, css: { 'active': activeViewTab() === 'items' }">
-              📦 Physical Inventory & Shelves
-            </button>
-            <button class="wh-tab-btn" data-bind="click: function() { activeViewTab('ledger'); }, css: { 'active': activeViewTab() === 'ledger' }">
-              🗄 NetSuite ERP Ledger
+              Vertical Storage Bins
             </button>
             <button class="wh-tab-btn" data-bind="click: function() { activeViewTab('activity'); }, css: { 'active': activeViewTab() === 'activity' }">
-              ⚡ Middleware Activity Log
+              Activity Feed
             </button>
           </div>
         </div>
 
-        <!-- VIEW 1: PHYSICAL ITEMS & SHELVES IN THE WAREHOUSE -->
+        <!-- VIEW 1: VERTICAL STORAGE BINS (OPEN / CLOSE & SQUARE ITEMS) -->
         <div class="wh-panel" data-bind="visible: activeViewTab() === 'items'">
-          <div class="wh-panel-desc">
-            <p><strong>Physical Warehouse Floor:</strong> In reality, items and bins are located in the physical world. Click any package or shelf tag below to simulate aiming the handheld laser scanner at it.</p>
-          </div>
-
-          <!-- Section 1: Physical Warehouse Packages with Barcode Labels -->
-          <div class="physical-group">
-            <h4 class="group-title">PHYSICAL PACKAGES & PALLETS ON RACKS (Click to Scan Item)</h4>
-            <div class="physical-items-grid">
-              
-              <!-- Item 1: Zebra TC52 -->
-              <div class="package-card" data-bind="click: function() { scanWarehouseBarcode('SKU-1001'); }">
-                <div class="package-header">
-                  <span class="pkg-icon">📱</span>
-                  <div>
-                    <strong class="pkg-name">Zebra TC52 Touch Computer</strong>
-                    <span class="pkg-bin font-mono">Location: BIN-A01 / A02</span>
-                  </div>
-                </div>
-                <div class="pkg-barcode-tag">
-                  <svg class="barcode-graphic" viewBox="0 0 100 24" preserveAspectRatio="none">
-                    <line x1="2" y1="0" x2="2" y2="24" stroke="currentColor" stroke-width="3"/>
-                    <line x1="8" y1="0" x2="8" y2="24" stroke="currentColor" stroke-width="1.5"/>
-                    <line x1="14" y1="0" x2="14" y2="24" stroke="currentColor" stroke-width="4"/>
-                    <line x1="22" y1="0" x2="22" y2="24" stroke="currentColor" stroke-width="2"/>
-                    <line x1="28" y1="0" x2="28" y2="24" stroke="currentColor" stroke-width="1"/>
-                    <line x1="33" y1="0" x2="33" y2="24" stroke="currentColor" stroke-width="3"/>
-                    <line x1="40" y1="0" x2="40" y2="24" stroke="currentColor" stroke-width="2"/>
-                    <line x1="46" y1="0" x2="46" y2="24" stroke="currentColor" stroke-width="4"/>
-                    <line x1="55" y1="0" x2="55" y2="24" stroke="currentColor" stroke-width="1.5"/>
-                    <line x1="62" y1="0" x2="62" y2="24" stroke="currentColor" stroke-width="3"/>
-                    <line x1="70" y1="0" x2="70" y2="24" stroke="currentColor" stroke-width="2"/>
-                    <line x1="78" y1="0" x2="78" y2="24" stroke="currentColor" stroke-width="3.5"/>
-                    <line x1="86" y1="0" x2="86" y2="24" stroke="currentColor" stroke-width="1.5"/>
-                    <line x1="94" y1="0" x2="94" y2="24" stroke="currentColor" stroke-width="3"/>
-                  </svg>
-                  <span class="barcode-number font-mono">SKU-1001</span>
-                </div>
-                <span class="pkg-scan-prompt">📷 Click to Scan</span>
-              </div>
-
-              <!-- Item 2: Honeywell CK65 -->
-              <div class="package-card" data-bind="click: function() { scanWarehouseBarcode('SKU-1002'); }">
-                <div class="package-header">
-                  <span class="pkg-icon">📦</span>
-                  <div>
-                    <strong class="pkg-name">Honeywell CK65 Rugged Terminal</strong>
-                    <span class="pkg-bin font-mono">Location: BIN-B01 / B04</span>
-                  </div>
-                </div>
-                <div class="pkg-barcode-tag">
-                  <svg class="barcode-graphic" viewBox="0 0 100 24" preserveAspectRatio="none">
-                    <line x1="2" y1="0" x2="2" y2="24" stroke="currentColor" stroke-width="2"/>
-                    <line x1="7" y1="0" x2="7" y2="24" stroke="currentColor" stroke-width="3.5"/>
-                    <line x1="14" y1="0" x2="14" y2="24" stroke="currentColor" stroke-width="1.5"/>
-                    <line x1="21" y1="0" x2="21" y2="24" stroke="currentColor" stroke-width="4"/>
-                    <line x1="30" y1="0" x2="30" y2="24" stroke="currentColor" stroke-width="2"/>
-                    <line x1="38" y1="0" x2="38" y2="24" stroke="currentColor" stroke-width="3"/>
-                    <line x1="47" y1="0" x2="47" y2="24" stroke="currentColor" stroke-width="1.5"/>
-                    <line x1="56" y1="0" x2="56" y2="24" stroke="currentColor" stroke-width="4"/>
-                    <line x1="66" y1="0" x2="66" y2="24" stroke="currentColor" stroke-width="2.5"/>
-                    <line x1="76" y1="0" x2="76" y2="24" stroke="currentColor" stroke-width="3"/>
-                    <line x1="85" y1="0" x2="85" y2="24" stroke="currentColor" stroke-width="1.5"/>
-                    <line x1="94" y1="0" x2="94" y2="24" stroke="currentColor" stroke-width="3"/>
-                  </svg>
-                  <span class="barcode-number font-mono">SKU-1002</span>
-                </div>
-                <span class="pkg-scan-prompt">📷 Click to Scan</span>
-              </div>
-
-              <!-- Item 3: Symbol LS2208 -->
-              <div class="package-card" data-bind="click: function() { scanWarehouseBarcode('SKU-1003'); }">
-                <div class="package-header">
-                  <span class="pkg-icon">🔫</span>
-                  <div>
-                    <strong class="pkg-name">Symbol LS2208 1D Laser Scanner</strong>
-                    <span class="pkg-bin font-mono">Location: BIN-C02</span>
-                  </div>
-                </div>
-                <div class="pkg-barcode-tag">
-                  <svg class="barcode-graphic" viewBox="0 0 100 24" preserveAspectRatio="none">
-                    <line x1="3" y1="0" x2="3" y2="24" stroke="currentColor" stroke-width="3"/>
-                    <line x1="10" y1="0" x2="10" y2="24" stroke="currentColor" stroke-width="1.5"/>
-                    <line x1="17" y1="0" x2="17" y2="24" stroke="currentColor" stroke-width="4"/>
-                    <line x1="25" y1="0" x2="25" y2="24" stroke="currentColor" stroke-width="2"/>
-                    <line x1="34" y1="0" x2="34" y2="24" stroke="currentColor" stroke-width="3"/>
-                    <line x1="43" y1="0" x2="43" y2="24" stroke="currentColor" stroke-width="1.5"/>
-                    <line x1="52" y1="0" x2="52" y2="24" stroke="currentColor" stroke-width="4"/>
-                    <line x1="63" y1="0" x2="63" y2="24" stroke="currentColor" stroke-width="2"/>
-                    <line x1="73" y1="0" x2="73" y2="24" stroke="currentColor" stroke-width="3.5"/>
-                    <line x1="84" y1="0" x2="84" y2="24" stroke="currentColor" stroke-width="1.5"/>
-                    <line x1="93" y1="0" x2="93" y2="24" stroke="currentColor" stroke-width="3"/>
-                  </svg>
-                  <span class="barcode-number font-mono">SKU-1003</span>
-                </div>
-                <span class="pkg-scan-prompt">📷 Click to Scan</span>
-              </div>
-
-              <!-- Item 4: GS1 Composite Barcode -->
-              <div class="package-card" data-bind="click: function() { scanWarehouseBarcode('(01)00012345678901(30)5'); }">
-                <div class="package-header">
-                  <span class="pkg-icon">🏷️</span>
-                  <div>
-                    <strong class="pkg-name">Master Pallet (GS1-128 AI)</strong>
-                    <span class="pkg-bin font-mono">Pre-set Qty: 5 units</span>
-                  </div>
-                </div>
-                <div class="pkg-barcode-tag">
-                  <svg class="barcode-graphic" viewBox="0 0 100 24" preserveAspectRatio="none">
-                    <line x1="2" y1="0" x2="2" y2="24" stroke="currentColor" stroke-width="4"/>
-                    <line x1="9" y1="0" x2="9" y2="24" stroke="currentColor" stroke-width="1"/>
-                    <line x1="15" y1="0" x2="15" y2="24" stroke="currentColor" stroke-width="3"/>
-                    <line x1="22" y1="0" x2="22" y2="24" stroke="currentColor" stroke-width="2"/>
-                    <line x1="29" y1="0" x2="29" y2="24" stroke="currentColor" stroke-width="4"/>
-                    <line x1="38" y1="0" x2="38" y2="24" stroke="currentColor" stroke-width="1.5"/>
-                    <line x1="47" y1="0" x2="47" y2="24" stroke="currentColor" stroke-width="3"/>
-                    <line x1="58" y1="0" x2="58" y2="24" stroke="currentColor" stroke-width="2"/>
-                    <line x1="68" y1="0" x2="68" y2="24" stroke="currentColor" stroke-width="4"/>
-                    <line x1="80" y1="0" x2="80" y2="24" stroke="currentColor" stroke-width="2"/>
-                    <line x1="91" y1="0" x2="91" y2="24" stroke="currentColor" stroke-width="3"/>
-                  </svg>
-                  <span class="barcode-number font-mono">(01)00012345678901(30)5</span>
-                </div>
-                <span class="pkg-scan-prompt">📷 Click to Scan</span>
-              </div>
-
-              <!-- Item 5: Damaged / Unknown Barcode -->
-              <div class="package-card bad-pkg" data-bind="click: function() { scanWarehouseBarcode('INVALID-BARCODE-999'); }">
-                <div class="package-header">
-                  <span class="pkg-icon">⚠️</span>
-                  <div>
-                    <strong class="pkg-name">Damaged / Unregistered Box</strong>
-                    <span class="pkg-bin font-mono">Simulates NetSuite 404 error</span>
-                  </div>
-                </div>
-                <div class="pkg-barcode-tag">
-                  <svg class="barcode-graphic" viewBox="0 0 100 24" preserveAspectRatio="none">
-                    <line x1="2" y1="0" x2="2" y2="24" stroke="currentColor" stroke-width="2"/>
-                    <line x1="12" y1="0" x2="12" y2="24" stroke="currentColor" stroke-width="2"/>
-                    <line x1="25" y1="0" x2="25" y2="24" stroke="currentColor" stroke-width="2"/>
-                    <line x1="38" y1="0" x2="38" y2="24" stroke="currentColor" stroke-width="2"/>
-                    <line x1="52" y1="0" x2="52" y2="24" stroke="currentColor" stroke-width="2"/>
-                    <line x1="68" y1="0" x2="68" y2="24" stroke="currentColor" stroke-width="2"/>
-                    <line x1="82" y1="0" x2="82" y2="24" stroke="currentColor" stroke-width="2"/>
-                    <line x1="94" y1="0" x2="94" y2="24" stroke="currentColor" stroke-width="2"/>
-                  </svg>
-                  <span class="barcode-number font-mono">INVALID-BARCODE-999</span>
-                </div>
-                <span class="pkg-scan-prompt">📷 Click to Scan</span>
-              </div>
+          
+          <!-- Rack Controls Bar -->
+          <div class="rack-controls-bar">
+            <div class="rack-summary-text">
+              <span>Click any bin to open/close. Click a square item to scan it into the handheld terminal.</span>
+            </div>
+            <div class="rack-action-buttons">
+              <button class="btn-rack-util" data-bind="click: expandAllBins">Expand All</button>
+              <button class="btn-rack-util" data-bind="click: collapseAllBins">Collapse All</button>
             </div>
           </div>
 
-          <!-- Section 2: Physical Shelf Rack Barcode Tags (Click to Scan Bin) -->
-          <div class="physical-group">
-            <h4 class="group-title">PHYSICAL SHELF RACK BIN PLATES (Click to Scan Bin Location)</h4>
-            <div class="shelf-bins-grid">
+          <!-- Vertical Bins Rack Column -->
+          <div class="vertical-bins-rack" data-bind="foreach: warehouseRack">
+            <div class="bin-shelf" data-bind="css: { 'bin-is-open': isOpen(), 'bin-is-target': isTarget(), 'bin-is-source': isSource() }">
               
-              <div class="shelf-tag" data-bind="click: function() { scanWarehouseBarcode('BIN-A01'); }">
-                <span class="tag-zone">Aisle A &bull; Receiving</span>
-                <span class="tag-code font-mono">BIN-A01</span>
-                <span class="tag-hint">Click to Scan Bin</span>
+              <!-- Bin Header Bar (Click to Open/Close) -->
+              <div class="shelf-header" data-bind="click: $root.toggleBin">
+                <div class="shelf-header-left">
+                  <span class="shelf-chevron font-mono" data-bind="text: isOpen() ? '▼' : '▶'"></span>
+                  <span class="shelf-plate font-mono" data-bind="text: binId"></span>
+                  <span class="shelf-desc" data-bind="text: aisle + ' • ' + zone"></span>
+                </div>
+                
+                <div class="shelf-header-right">
+                  <!-- How many units are in this location -->
+                  <span class="shelf-count font-mono" data-bind="text: totalUnits + ' units (' + itemCount + ' SKUs)'"></span>
+
+                  <!-- Quick target button when an item is active on the scanner -->
+                  <!-- ko if: $root.selectedItem() && $root.fromBin() !== binId -->
+                  <button class="btn-shelf-action font-mono" data-bind="click: function(d, e) { e.stopPropagation(); $root.setDestinationBin(binId); }, css: { 'active-target': isTarget() }">
+                    <span data-bind="text: isTarget() ? '✓ Target Bin' : 'Move Here &rarr;'"></span>
+                  </button>
+                  <!-- /ko -->
+                </div>
               </div>
 
-              <div class="shelf-tag" data-bind="click: function() { scanWarehouseBarcode('BIN-A02'); }">
-                <span class="tag-zone">Aisle A &bull; Bulk</span>
-                <span class="tag-code font-mono">BIN-A02</span>
-                <span class="tag-hint">Click to Scan Bin</span>
-              </div>
+              <!-- Bin Shelf Contents (Open/Closed) -->
+              <!-- ko if: isOpen -->
+              <div class="shelf-content">
+                <!-- Square Items Grid -->
+                <!-- ko if: items.length > 0 -->
+                <div class="square-items-row" data-bind="foreach: items">
+                  <div class="square-item-box" data-bind="click: function() { $root.selectItemFromBin($data, $parent.binId); }, css: { 'active-box': $root.selectedItem() && $root.selectedItem().sku === sku && $root.fromBin() === $parent.binId }">
+                    <div class="box-top">
+                      <span class="box-icon" data-bind="text: $root.getItemIcon(sku)"></span>
+                      <span class="box-qty-badge font-mono" data-bind="text: qty_on_hand"></span>
+                    </div>
+                    <strong class="box-sku font-mono" data-bind="text: sku"></strong>
+                    <span class="box-name" data-bind="text: displayname"></span>
+                    <span class="box-action-hint">Click to Scan</span>
+                  </div>
+                </div>
+                <!-- /ko -->
 
-              <div class="shelf-tag" data-bind="click: function() { scanWarehouseBarcode('BIN-B01'); }">
-                <span class="tag-zone">Aisle B &bull; Fast-Pick</span>
-                <span class="tag-code font-mono">BIN-B01</span>
-                <span class="tag-hint">Click to Scan Bin</span>
+                <!-- Empty Bin Notice -->
+                <!-- ko if: items.length === 0 -->
+                <div class="empty-shelf-notice">
+                  <span class="empty-icon">📭</span>
+                  <span class="empty-text">Empty Shelf &bull; 0 items</span>
+                  <!-- ko if: $root.selectedItem() && $root.fromBin() !== binId -->
+                  <button class="btn-empty-target font-mono" data-bind="click: function() { $root.setDestinationBin(binId); }">
+                    Set as Destination Bin
+                  </button>
+                  <!-- /ko -->
+                </div>
+                <!-- /ko -->
               </div>
+              <!-- /ko -->
 
-              <div class="shelf-tag" data-bind="click: function() { scanWarehouseBarcode('BIN-B04'); }">
-                <span class="tag-zone">Aisle B &bull; High-Rack</span>
-                <span class="tag-code font-mono">BIN-B04</span>
-                <span class="tag-hint">Click to Scan Bin</span>
-              </div>
-
-              <div class="shelf-tag" data-bind="click: function() { scanWarehouseBarcode('BIN-C02'); }">
-                <span class="tag-zone">Aisle C &bull; Reserve</span>
-                <span class="tag-code font-mono">BIN-C02</span>
-                <span class="tag-hint">Click to Scan Bin</span>
-              </div>
-
-              <div class="shelf-tag dock-tag" data-bind="click: function() { scanWarehouseBarcode('BIN-STAGE'); }">
-                <span class="tag-zone">Shipping Dock &bull; Outbound</span>
-                <span class="tag-code font-mono">BIN-STAGE</span>
-                <span class="tag-hint">Click to Scan Bin</span>
-              </div>
             </div>
           </div>
         </div>
 
-        <!-- VIEW 2: NETSUITE RELATIONAL ERP LEDGER -->
-        <div class="wh-panel" data-bind="visible: activeViewTab() === 'ledger'">
-          <div class="wh-panel-header">
-            <div>
-              <h3>NetSuite Inventory Balances</h3>
-              <p>Relational SQLite store (<code>inventory_balances</code> joined with <code>items</code> and <code>bins</code>)</p>
-            </div>
-            <button class="btn-subtle" data-bind="click: fetchInventory">↻ Refresh</button>
-          </div>
-
-          <table class="clean-table">
-            <thead>
-              <tr>
-                <th>BIN</th>
-                <th>SKU</th>
-                <th>ITEM DESCRIPTION</th>
-                <th class="text-right">ON-HAND</th>
-                <th>ACTION</th>
-              </tr>
-            </thead>
-            <tbody data-bind="foreach: inventoryList">
-              <tr>
-                <td><span class="badge-bin font-mono" data-bind="text: bin_id"></span></td>
-                <td><strong class="font-mono" data-bind="text: sku"></strong></td>
-                <td data-bind="text: displayname"></td>
-                <td class="text-right font-mono font-bold" data-bind="text: qty_on_hand"></td>
-                <td>
-                  <button class="btn-tbl-scan" data-bind="click: function() { $root.scanWarehouseBarcode(sku); }">Scan</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- VIEW 3: MIDDLEWARE ACTIVITY TIMELINE -->
+        <!-- VIEW 2: ACTIVITY FEED -->
         <div class="wh-panel" data-bind="visible: activeViewTab() === 'activity'">
           <div class="wh-panel-header">
             <div>
