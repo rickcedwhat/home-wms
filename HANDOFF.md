@@ -21,7 +21,7 @@ This prototype simulates that entire lifecycle locally with zero external depend
                   | HTTP REST (Local Wi-Fi simulation)
                   v
 +-----------------+------------------+
-|  RF-SMART Node.js Middleware      |  <-- Express service layer on port 5190
+|  RF-SMART Node.js Middleware      |  <-- Express service layer on port 7370
 |  - Input validation & rate limits  |
 |  - In-memory cache layer           |
 |  - Token-Based Auth (TBA) signing  |
@@ -51,7 +51,7 @@ A mobile-friendly Single Page Application designed to mimic rugged warehouse bar
 
 ### 2. RF-SMART Node.js Middleware (Express)
 The fast gateway and buffer service:
-* Listens on port 5190 (registered with local-dev-dashboard).
+* Listens on port 7370 (registered with local-dev-dashboard).
 * Endpoints:
   * `GET /api/scanner/lookup?barcode=...`: Validates barcode format, checks local memory cache, and returns item metadata in under 20ms.
   * `POST /api/scanner/transfer`: Validates payload (`itemId`, `fromBin`, `toBin`, `quantity`), generates signed mock TBA headers, and delegates execution to the mock ERP layer.
@@ -94,7 +94,7 @@ A simulated NetSuite environment:
 RFSmart/
 ├── package.json
 ├── server/
-│   ├── index.js                  # Main Express server entry point (port 5190)
+│   ├── index.js                  # Main Express server entry point (port 7370)
 │   ├── routes/
 │   │   └── scanner.js            # Node middleware routes for lookup and transfer
 │   ├── services/
@@ -119,6 +119,6 @@ RFSmart/
 
 1. Check existing directory structure and verify git is initialized.
 2. Initialize `package.json` with `"type": "module"` and install minimal dependencies: `express`, `cors`, and optionally `better-sqlite3` or plain in-memory JavaScript stores.
-3. Configure the start command to launch on port 5190: `npm run dev`.
+3. Configure the start command to launch on port 7370: `npm run dev`.
 4. Keep the code clean, modular, and heavily commented so Cedrick can easily inspect every layer and explain it during his hiring manager interview.
 5. Avoid complex build tooling like Webpack or Vite for this specific learning demo unless requested. Plain static files for Knockout via CDN and vanilla ES modules for Node will make debugging instant.
