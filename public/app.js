@@ -108,8 +108,8 @@ function ScannerViewModel() {
   self.feedbackMessage = ko.observable('');
   self.feedbackType = ko.observable('info'); // 'info' | 'success' | 'error'
 
-  // Navigation tab for right column
-  self.activeSubTab = ko.observable('telemetry'); // 'telemetry' | 'inventory' | 'architecture'
+  // Navigation tab for right column (Physical Warehouse environment)
+  self.activeViewTab = ko.observable('items'); // 'items' | 'ledger' | 'activity'
 
   // Collections (Observable Arrays)
   self.inventoryList = ko.observableArray([]);
@@ -232,10 +232,27 @@ function ScannerViewModel() {
     return true;
   };
 
-  self.quickScan = function(barcode) {
+  self.scanWarehouseBarcode = function(barcode) {
+    // If the barcode is a shelf bin barcode and an item is already active:
+    if (/^BIN-[A-Z0-9-]+$/i.test(barcode) && self.selectedItem()) {
+      if (!self.fromBin()) {
+        self.fromBin(barcode);
+        self.showFeedback(`Source bin scanned: ${barcode}`, 'info', 2500);
+        self.triggerFlash(true);
+      } else {
+        self.toBin(barcode);
+        self.showFeedback(`Destination bin scanned: ${barcode}`, 'info', 2500);
+        self.triggerFlash(true);
+      }
+      return;
+    }
+
+    // Otherwise, it is an item or general scan:
     self.scannedBarcode(barcode);
     self.executeLookup();
   };
+
+  self.quickScan = self.scanWarehouseBarcode;
 
   self.resetForm = function() {
     self.scannedBarcode('');

@@ -136,11 +136,13 @@ document.addEventListener('DOMContentLoaded', () => {
         currentFileContent = file.content;
 
         // Update Breadcrumb & Context Card
-        breadcrumbDisplay.textContent = `RFSmart > ${file.path.replace(/\//g, ' > ')}`;
-        contextLayerBadge.textContent = file.layer;
-        contextLayerBadge.className = `context-layer-badge badge-${file.layer.toLowerCase()}`;
-        contextFileName.textContent = file.name;
-        contextFileDesc.textContent = file.description;
+        if (breadcrumbDisplay) breadcrumbDisplay.textContent = `RFSmart > ${file.path.replace(/\//g, ' > ')}`;
+        if (contextLayerBadge) {
+          contextLayerBadge.textContent = file.layer;
+          contextLayerBadge.className = `info-layer badge-${file.layer.toLowerCase()}`;
+        }
+        if (contextFileName) contextFileName.textContent = file.name;
+        if (contextFileDesc) contextFileDesc.textContent = file.description;
 
         // Set Code Content
         codeViewer.className = `language-${file.language}`;
@@ -246,11 +248,21 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Toggle API Playground Drawer
+  const drawerBar = document.getElementById('drawerBar');
+  if (drawerBar) {
+    drawerBar.addEventListener('click', (e) => {
+      if (e.target !== closeDrawerBtn) {
+        playgroundDrawer.classList.toggle('collapsed');
+      }
+    });
+  }
+
   togglePlaygroundBtn.addEventListener('click', () => {
     playgroundDrawer.classList.toggle('collapsed');
   });
 
-  closeDrawerBtn.addEventListener('click', () => {
+  closeDrawerBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
     playgroundDrawer.classList.add('collapsed');
   });
 
