@@ -86,56 +86,157 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Render Sidebar Tree
+  // Directory Tree State: Set of collapsed folder paths
+  const collapsedFolders = new Set();
+  let currentFilteredFiles = null;
+
+  // Build hierarchical tree object from list of file paths
+  function buildDirectoryTree(files) {
+    const root = { name: 'RFSmart', isDirectory: true, path: '', children: {} };
+    for (const f of files) {
+      const parts = f.path.split('/');
+      let current = root;
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        const isFile = (i === parts.length - 1);
+        if (isFile) {
+          current.children[part] = {
+            name: part,
+            isDirectory: false,
+            path: f.path,
+            fileMeta: f
+          };
+        } else {
+          const folderPath = parts.slice(0, i + 1).join('/');
+          if (!current.children[part]) {
+            current.children[part] = {
+              name: part,
+              isDirectory: true,
+              path: folderPath,
+              children: {}
+            };
+          }
+          current = current.children[part];
+        }
+      }
+    }
+    return root;
+  }
+
+  // Ensure all ancestor folders of a file are expanded
+  function expandAncestors(filePath) {
+    if (!filePath) return;
+    const parts = filePath.split('/');
+    for (let i = 1; i < parts.length; i++) {
+      const folderPath = parts.slice(0, i).join('/');
+      collapsedFolders.delete(folderPath);
+    }
+  }
+
+  // Render Directory Folder Node
+  function renderFolderNode(node, container, depth = 0) {
+    const isCollapsed = collapsedFolders.has(node.path);
+    const folderEl = document.createElement('div');
+    folderEl.className = 'tree-folder';
+
+    const rowEl = document.createElement('div');
+    rowEl.className = 'tree-folder-row';
+    rowEl.style.paddingLeft = `${depth * 14 + 10}px`;
+    rowEl.innerHTML = `
+      <span class="folder-arrow">${isCollapsed ? '▸' : '▾'}</span>
+      <span class="folder-icon">${isCollapsed ? '📁' : '📂'}</span>
+      <span class="folder-name">${node.name}</span>
+    `;
+
+    const childrenContainer = document.createElement('div');
+    childrenContainer.className = `tree-children ${isCollapsed ? 'collapsed' : ''}`;
+
+    rowEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (collapsedFolders.has(node.path)) {
+        collapsedFolders.delete(node.path);
+      } else {
+        collapsedFolders.add(node.path);
+      }
+      renderFileTree(currentFilteredFiles || projectFiles);
+    });
+
+    folderEl.appendChild(rowEl);
+    folderEl.appendChild(childrenContainer);
+    container.appendChild(folderEl);
+
+    // Sort children: directories first (alphabetically), then files (alphabetically)
+    const childEntries = Object.values(node.children).sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) {
+        return a.isDirectory ? -1 : 1;
+      }
+      return a.name.localeCompare(b.name);
+    });
+
+    for (const child of childEntries) {
+      if (child.isDirectory) {
+        renderFolderNode(child, childrenContainer, depth + 1);
+      } else {
+        renderFileNode(child, childrenContainer, depth + 1);
+      }
+    }
+  }
+
+  // Render File Node
+  function renderFileNode(node, container, depth = 0) {
+    const f = node.fileMeta;
+    const fileEl = document.createElement('div');
+    fileEl.className = `tree-file ${f.path === activeFilePath ? 'active' : ''}`;
+    fileEl.dataset.path = f.path;
+    fileEl.style.paddingLeft = `${depth * 14 + 10}px`;
+
+    const ext = f.name.split('.').pop().toLowerCase();
+    fileEl.innerHTML = `
+      <div class="tree-file-name" title="${f.path}">
+        <span class="ext-badge ${ext}">${ext.toUpperCase()}</span>
+        <span>${f.name}</span>
+      </div>
+    `;
+
+    fileEl.addEventListener('click', () => {
+      navigateTo(f.path, 1);
+    });
+
+    container.appendChild(fileEl);
+  }
+
+  // Render Sidebar Tree as a true hierarchical directory
   function renderFileTree(files) {
+    currentFilteredFiles = files;
     fileTreeContainer.innerHTML = '';
 
-    const groups = {};
-    for (const file of files) {
-      if (!groups[file.category]) groups[file.category] = [];
-      groups[file.category].push(file);
+    if (!files || files.length === 0) {
+      fileTreeContainer.innerHTML = '<div class="tree-empty">No matching files found</div>';
+      return;
     }
 
-    const groupIcons = {
-      'Node.js Middleware': '⚡',
-      'Mock NetSuite SuiteScript 2.1': '☁️',
-      'Handheld Scanner (Knockout)': '📱',
-      'Automated Tests': '🧪',
-      'Documentation': '📄'
-    };
+    // Root project indicator
+    const rootHeader = document.createElement('div');
+    rootHeader.className = 'tree-root-header';
+    rootHeader.innerHTML = `<span>📦 RFSmart Workspace</span>`;
+    fileTreeContainer.appendChild(rootHeader);
 
-    for (const [category, catFiles] of Object.entries(groups)) {
-      const groupEl = document.createElement('div');
-      groupEl.className = 'tree-group';
+    const rootNode = buildDirectoryTree(files);
 
-      const icon = groupIcons[category] || '📁';
-      groupEl.innerHTML = `
-        <div class="tree-group-header">
-          <span>${icon}</span>
-          <span>${category}</span>
-        </div>
-      `;
-
-      for (const f of catFiles) {
-        const itemEl = document.createElement('div');
-        itemEl.className = `tree-item ${f.path === activeFilePath ? 'active' : ''}`;
-        itemEl.dataset.path = f.path;
-
-        const ext = f.name.split('.').pop();
-        itemEl.innerHTML = `
-          <div class="tree-item-name">
-            <span class="ext-badge ${ext}">${ext.toUpperCase()}</span>
-            <span>${f.name}</span>
-          </div>
-        `;
-
-        itemEl.addEventListener('click', () => {
-          navigateTo(f.path, 1);
-        });
-        groupEl.appendChild(itemEl);
+    // Sort children of root: directories first, then files
+    const rootEntries = Object.values(rootNode.children).sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) {
+        return a.isDirectory ? -1 : 1;
       }
+      return a.name.localeCompare(b.name);
+    });
 
-      fileTreeContainer.appendChild(groupEl);
+    for (const entry of rootEntries) {
+      if (entry.isDirectory) {
+        renderFolderNode(entry, fileTreeContainer, 0);
+      } else {
+        renderFileNode(entry, fileTreeContainer, 0);
+      }
     }
   }
 
@@ -485,7 +586,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function updateSidebarActiveState() {
-    const items = fileTreeContainer.querySelectorAll('.tree-item');
+    const items = fileTreeContainer.querySelectorAll('.tree-file');
     items.forEach(el => {
       if (el.dataset.path === activeFilePath) {
         el.classList.add('active');
@@ -495,7 +596,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Search Filter
+  // Search Filter with Auto-Expand of Ancestors
   fileSearchInput.addEventListener('input', (e) => {
     const query = e.target.value.trim().toLowerCase();
     if (!query) {
@@ -506,9 +607,48 @@ document.addEventListener('DOMContentLoaded', () => {
     const filtered = projectFiles.filter(f => 
       f.name.toLowerCase().includes(query) || 
       f.path.toLowerCase().includes(query) ||
-      f.category.toLowerCase().includes(query)
+      (f.category && f.category.toLowerCase().includes(query))
     );
+
+    // Expand ancestor folders of all matching files
+    filtered.forEach(f => expandAncestors(f.path));
     renderFileTree(filtered);
+  });
+
+  // Architecture Guide Drawer Bindings
+  const openGuideBtn = document.getElementById('openGuideBtn');
+  const closeGuideBtn = document.getElementById('closeGuideBtn');
+  const guideBackdrop = document.getElementById('guideBackdrop');
+  const guideDrawer = document.getElementById('guideDrawer');
+
+  function openGuide() {
+    if (guideDrawer && guideBackdrop) {
+      guideDrawer.classList.add('open');
+      guideBackdrop.classList.add('active');
+    }
+  }
+
+  function closeGuide() {
+    if (guideDrawer && guideBackdrop) {
+      guideDrawer.classList.remove('open');
+      guideBackdrop.classList.remove('active');
+    }
+  }
+
+  if (openGuideBtn) openGuideBtn.addEventListener('click', openGuide);
+  if (closeGuideBtn) closeGuideBtn.addEventListener('click', closeGuide);
+  if (guideBackdrop) guideBackdrop.addEventListener('click', closeGuide);
+
+  // Jump to Code buttons inside Architecture Guide
+  document.querySelectorAll('.btn-jump-code').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const file = btn.dataset.file;
+      const line = parseInt(btn.dataset.line, 10) || 1;
+      closeGuide();
+      expandAncestors(file);
+      renderFileTree(currentFilteredFiles || projectFiles);
+      navigateTo(file, line);
+    });
   });
 
   // Copy Code to Clipboard

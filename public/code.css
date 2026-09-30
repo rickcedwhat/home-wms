@@ -285,16 +285,13 @@ body {
 .tree-list {
   flex: 1;
   overflow-y: auto;
-  padding: 0.35rem 0;
+  padding: 0.25rem 0;
 }
 
-.tree-group {
-  margin-bottom: 0.5rem;
-}
-
-.tree-group-header {
-  padding: 0.3rem 0.85rem;
-  font-size: 0.65rem;
+/* Root project row */
+.tree-root-header {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.68rem;
   font-weight: 700;
   color: var(--text-dim);
   display: flex;
@@ -302,50 +299,122 @@ body {
   gap: 0.35rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  margin-bottom: 0.25rem;
 }
 
-.tree-item {
-  padding: 0.32rem 0.85rem 0.32rem 1.6rem;
+/* Directory Folder Node */
+.tree-folder {
+  user-select: none;
+}
+
+.tree-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  margin: 1px 4px;
+  transition: all 0.12s;
+}
+
+.tree-folder-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.folder-arrow {
+  font-size: 0.62rem;
+  color: var(--text-dim);
+  width: 12px;
+  display: inline-block;
+  text-align: center;
+  transition: transform 0.12s;
+}
+
+.folder-icon {
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.folder-name {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #c9d1d9;
+}
+
+/* Children container */
+.tree-children {
+  display: flex;
+  flex-direction: column;
+}
+
+.tree-children.collapsed {
+  display: none;
+}
+
+/* File Node */
+.tree-file {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 0.75rem;
+  padding: 0.28rem 0.5rem;
+  font-size: 0.73rem;
   cursor: pointer;
   color: var(--text-muted);
   border-left: 2px solid transparent;
+  border-radius: 0 4px 4px 0;
+  margin: 1px 4px 1px 0;
   transition: all 0.1s;
 }
 
-.tree-item:hover {
+.tree-file:hover {
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
 }
 
-.tree-item.active {
-  background: rgba(56, 139, 253, 0.1);
+.tree-file.active {
+  background: rgba(56, 139, 253, 0.12);
   color: #fff;
   border-left-color: var(--blue);
+  font-weight: 600;
 }
 
-.tree-item-name {
+.tree-file-name {
   display: flex;
   align-items: center;
   gap: 0.45rem;
   font-family: var(--font-mono);
-  font-size: 0.73rem;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ext-badge {
-  font-size: 0.58rem;
+  font-size: 0.56rem;
   font-weight: 700;
-  padding: 0.08rem 0.25rem;
+  padding: 0.06rem 0.25rem;
   border-radius: 3px;
+  letter-spacing: 0.02em;
 }
 
-.ext-badge.js { color: var(--amber); }
-.ext-badge.html { color: var(--red); }
-.ext-badge.css { color: var(--blue); }
-.ext-badge.md { color: var(--green); }
+.ext-badge.js { color: #f59e0b; background: rgba(245, 158, 11, 0.12); }
+.ext-badge.json { color: #eab308; background: rgba(234, 179, 8, 0.12); }
+.ext-badge.html { color: #f85149; background: rgba(248, 81, 73, 0.12); }
+.ext-badge.css { color: #58a6ff; background: rgba(88, 166, 255, 0.12); }
+.ext-badge.md { color: #10b981; background: rgba(16, 185, 129, 0.12); }
+
+.tree-empty {
+  padding: 1.5rem 1rem;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 0.72rem;
+}
 
 /* ==========================================================================
    Editor Area
@@ -639,4 +708,205 @@ body {
   white-space: pre-wrap;
   word-break: break-all;
   overflow-y: auto;
+}
+
+/* ==========================================================================
+   Architecture Guide Drawer & Modal
+   ========================================================================== */
+.btn-guide {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #34d399;
+}
+
+.btn-guide:hover {
+  background: rgba(16, 185, 129, 0.25);
+  color: #6ee7b7;
+}
+
+.guide-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+  z-index: 998;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.guide-backdrop.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.guide-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 480px;
+  max-width: 90vw;
+  height: 100vh;
+  background: #161b22;
+  border-left: 1px solid var(--border);
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.guide-drawer.open {
+  transform: translateX(0);
+}
+
+.guide-drawer-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #1a202c;
+}
+
+.guide-title-box {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.guide-title-box h3 {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.btn-close-guide {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.35rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 0.25rem;
+  border-radius: 4px;
+}
+
+.btn-close-guide:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.guide-drawer-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.guide-hero-banner {
+  background: rgba(88, 166, 255, 0.08);
+  border: 1px solid rgba(88, 166, 255, 0.2);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
+  color: #c9d1d9;
+  line-height: 1.45;
+}
+
+.guide-hero-banner strong {
+  color: #79c0ff;
+}
+
+.guide-card {
+  background: #0d1117;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  transition: border-color 0.15s;
+}
+
+.guide-card:hover {
+  border-color: #58a6ff;
+}
+
+.guide-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.guide-num {
+  background: rgba(88, 166, 255, 0.15);
+  color: #58a6ff;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.72rem;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.guide-card-header h4 {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.guide-summary {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.guide-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.gtag {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  background: #161b22;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #8b949e;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+}
+
+.guide-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.btn-jump-code {
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #79c0ff;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-jump-code:hover {
+  background: #388bfd;
+  border-color: #388bfd;
+  color: #fff;
 }

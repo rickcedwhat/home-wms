@@ -35,6 +35,14 @@ const PROJECT_FILES = [
     description: 'REST API routes for barcode lookup, bin transfers, cache invalidation, and ERP error normalization.'
   },
   {
+    path: 'server/routes/ide.js',
+    category: 'Node.js Middleware',
+    layer: 'MIDDLEWARE',
+    name: 'ide.js',
+    language: 'javascript',
+    description: 'Code Studio backend API providing directory trees, file source viewer, and symbol definitions.'
+  },
+  {
     path: 'server/services/barcodeParser.js',
     category: 'Node.js Middleware',
     layer: 'MIDDLEWARE',
@@ -127,7 +135,33 @@ const PROJECT_FILES = [
     description: 'Industrial warehouse scanner styling, tactile buttons, high-contrast dark theme, and visual flash effects.'
   },
 
-  // 4. Automated Tests
+  // 4. Code Studio Frontend
+  {
+    path: 'public/code.html',
+    category: 'Code Studio',
+    layer: 'STUDIO',
+    name: 'code.html',
+    language: 'markup',
+    description: 'In-browser Code Studio interface layout, editor tabs, and live test console.'
+  },
+  {
+    path: 'public/code.js',
+    category: 'Code Studio',
+    layer: 'STUDIO',
+    name: 'code.js',
+    language: 'javascript',
+    description: 'Directory tree renderer, syntax highlighting, Command-Click navigation, and live test runner.'
+  },
+  {
+    path: 'public/code.css',
+    category: 'Code Studio',
+    layer: 'STUDIO',
+    name: 'code.css',
+    language: 'css',
+    description: 'VS Code/GitHub dark theme styling for Code Studio and directory explorer.'
+  },
+
+  // 5. Automated Tests
   {
     path: 'test/scanner.test.js',
     category: 'Automated Tests',
@@ -137,7 +171,23 @@ const PROJECT_FILES = [
     description: '16 automated backend tests verifying parser, TBA auth, cache, concurrency mutex, and SuiteScript engine.'
   },
 
-  // 5. Documentation
+  // 6. Project & Documentation
+  {
+    path: 'GUIDE.md',
+    category: 'Documentation',
+    layer: 'DOCS',
+    name: 'GUIDE.md',
+    language: 'markdown',
+    description: 'Comprehensive walkthrough of the 6 backend architectural systems and interview talking points.'
+  },
+  {
+    path: 'package.json',
+    category: 'Project',
+    layer: 'CONFIG',
+    name: 'package.json',
+    language: 'json',
+    description: 'Project configuration, scripts, and runtime dependencies.'
+  },
   {
     path: 'README.md',
     category: 'Documentation',
