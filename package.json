@@ -1,0 +1,26 @@
+{
+  "name": "rf-smart-prototype",
+  "version": "1.0.0",
+  "description": "RF-SMART warehouse mobile data capture and NetSuite SuiteScript 2.1 middleware prototype",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test"
+  },
+  "keywords": [
+    "rfsmart",
+    "netsuite",
+    "suitescript",
+    "warehouse",
+    "knockoutjs",
+    "express"
+  ],
+  "author": "Cedrick Catalan",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  }
+}

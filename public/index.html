@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RF-SMART Mobile Scanner & NetSuite SuiteScript Prototype</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Knockout.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.5.1/knockout-latest.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top System Header -->
+    <header class="system-header">
+      <div class="brand">
+        <span class="logo-badge">RF-SMART</span>
+        <span class="system-title">Warehouse Mobile Data Capture & NetSuite ERP Bridge</span>
+      </div>
+      <div class="system-metrics">
+        <div class="metric-pill" data-bind="with: cacheStats">
+          <span class="label">CACHE HIT RATIO:</span>
+          <span class="val highlight" data-bind="text: hitRatio">0%</span>
+        </div>
+        <div class="metric-pill">
+          <span class="label">MIDDLEWARE:</span>
+          <span class="val status-ok">PORT 7370</span>
+        </div>
+        <div class="metric-pill">
+          <span class="label">ERP SIM:</span>
+          <span class="val status-tba">SuiteScript 2.1 (TBA)</span>
+        </div>
+        <button class="sound-toggle-btn" data-bind="click: toggleSound, css: { 'muted': !soundEnabled() }">
+          <span data-bind="text: soundEnabled() ? '🔊 Audio ON' : '🔇 Audio OFF'"></span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace Layout: Scanner on Left, ERP & Telemetry on Right -->
+    <main class="workspace-grid">
+      <!-- LEFT COLUMN: RUGGED MOBILE COMPUTER SIMULATION (Zebra / Honeywell Style) -->
+      <section class="device-column">
+        <div class="rugged-device-frame" data-bind="css: { 'flash-success': flashSuccess(), 'flash-error': flashError() }">
+          <!-- Device Top Bezel & Sensors -->
+          <div class="device-bezel-top">
+            <div class="sensor-row">
+              <span class="scanner-brand">ZEBRA TC52x</span>
+              <div class="laser-window">
+                <span class="laser-beam" data-bind="css: { 'active': isProcessing }"></span>
+                <span>BARCODE ENGINE 2D</span>
+              </div>
+              <span class="battery-indicator">🔋 98%</span>
+            </div>
+            <div class="device-status-bar">
+              <span>WIFI: WH-5GHz-AP03</span>
+              <span>USER: CCATALAN</span>
+              <span>SHIFT: DAY</span>
+            </div>
+          </div>
+
+          <!-- Scanner Screen (High-Contrast Industrial UI) -->
+          <div class="scanner-screen">
+            <!-- App Banner inside Scanner -->
+            <div class="scanner-app-header">
+              <span class="app-icon">📦</span>
+              <div class="header-titles">
+                <h1>BIN TRANSFER</h1>
+                <span class="screen-mode">TX #7370 &bull; LIVE</span>
+              </div>
+              <button class="btn-reset-scan" data-bind="click: resetForm" title="Clear / Reset">Reset</button>
+            </div>
+
+            <!-- Feedback Notification Banner -->
+            <div class="feedback-banner" data-bind="visible: feedbackMessage, css: feedbackType">
+              <span class="feedback-icon" data-bind="text: feedbackType() === 'success' ? '✓' : '⚠'"></span>
+              <span class="feedback-text" data-bind="text: feedbackMessage"></span>
+            </div>
+
+            <!-- Step 1: Scan Barcode Input -->
+            <div class="scan-input-card">
+              <label for="barcodeInput" class="input-label">
+                <span>SCAN ITEM BARCODE / SKU / UPC</span>
+                <span class="key-hint">Press [Enter] or Click Scan</span>
+              </label>
+              <div class="input-action-row">
+                <div class="barcode-field-wrapper">
+                  <span class="barcode-symbol">║▌║▌</span>
+                  <input 
+                    id="barcodeInput"
+                    type="text" 
+                    class="barcode-input"
+                    placeholder="Scan or enter barcode..." 
+                    data-bind="textInput: scannedBarcode, event: { keyup: handleBarcodeKeypress }"
+                    autocomplete="off"
+                    autofocus
+                  />
+                  <!-- ko if: isProcessing -->
+                  <span class="spinner-inline"></span>
+                  <!-- /ko -->
+                </div>
+                <button class="btn-scan-trigger" data-bind="click: executeLookup, enable: scannedBarcode().trim().length > 0">
+                  SCAN
+                </button>
+              </div>
+
+              <!-- Quick-Tap Barcode Simulation Buttons -->
+              <div class="quick-barcodes-wrapper">
+                <span class="quick-title">Quick Test Barcodes (Click to simulate scan):</span>
+                <div class="quick-tags">
+                  <button class="tag-btn" data-bind="click: function() { quickScan('SKU-1001'); }">SKU-1001 (Zebra TC52)</button>
+                  <button class="tag-btn" data-bind="click: function() { quickScan('SKU-1002'); }">SKU-1002 (Honeywell CK65)</button>
+                  <button class="tag-btn" data-bind="click: function() { quickScan('SKU-1003'); }">SKU-1003 (Scanner)</button>
+                  <button class="tag-btn" data-bind="click: function() { quickScan('(01)00012345678901(30)5'); }">GS1-128 AI (UPC + Qty)</button>
+                  <button class="tag-btn error-tag" data-bind="click: function() { quickScan('INVALID-BARCODE-999'); }">Invalid Barcode</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 2: Scanned Item Details Card -->
+            <!-- ko if: selectedItem -->
+            <div class="item-detail-card" data-bind="with: selectedItem">
+              <div class="card-header-line">
+                <span class="item-sku" data-bind="text: sku"></span>
+                <span class="item-badge">INVENTORY ITEM</span>
+              </div>
+              <h2 class="item-title" data-bind="text: displayName"></h2>
+              
+              <div class="item-meta-grid">
+                <div class="meta-item">
+                  <span class="meta-lbl">UPC / Barcode:</span>
+                  <span class="meta-val font-mono" data-bind="text: upc || 'N/A'"></span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-lbl">Total WH Stock:</span>
+                  <span class="meta-val font-bold" data-bind="text: totalQty + ' units'"></span>
+                </div>
+              </div>
+
+              <!-- Current Bin Inventory Breakdown -->
+              <div class="bin-breakdown">
+                <span class="bin-breakdown-title">Current Bin Stock in Warehouse:</span>
+                <div class="bin-pills-list" data-bind="foreach: bins">
+                  <div class="bin-pill" data-bind="click: function() { $root.selectSourceBin(bin_id); }, css: { 'active-source': $root.fromBin() === bin_id }">
+                    <span class="pill-bin" data-bind="text: bin_id"></span>
+                    <span class="pill-qty" data-bind="text: qty_on_hand + ' on-hand'"></span>
+                    <span class="pill-zone" data-bind="text: zone"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- /ko -->
+
+            <!-- Step 3: Bin Transfer Action Panel -->
+            <!-- ko if: selectedItem -->
+            <div class="transfer-action-card">
+              <div class="transfer-step-title">
+                <span>TRANSFER LOCATION & QUANTITY</span>
+              </div>
+
+              <div class="transfer-grid">
+                <!-- From Bin Field -->
+                <div class="form-group">
+                  <label class="form-label">FROM BIN (SOURCE)</label>
+                  <select class="form-select" data-bind="options: sourceBinOptions, value: fromBin, optionsCaption: '-- Select Source Bin --'"></select>
+                  <!-- ko if: availableInFromBin() !== null -->
+                  <span class="avail-hint">Available: <strong data-bind="text: availableInFromBin()"></strong> units</span>
+                  <!-- /ko -->
+                </div>
+
+                <!-- Arrow Indicator -->
+                <div class="transfer-arrow">&rarr;</div>
+
+                <!-- To Bin Field -->
+                <div class="form-group">
+                  <label class="form-label">TO BIN (DESTINATION)</label>
+                  <select class="form-select" data-bind="options: destBinOptions, value: toBin, optionsCaption: '-- Select Dest Bin --'"></select>
+                </div>
+              </div>
+
+              <!-- Quantity Selector with Stepper -->
+              <div class="qty-control-row">
+                <label class="form-label">QUANTITY TO MOVE</label>
+                <div class="stepper-wrapper">
+                  <button class="btn-step" data-bind="click: decrementQty">&minus;</button>
+                  <input type="number" class="qty-input" min="1" data-bind="textInput: transferQty">
+                  <button class="btn-step" data-bind="click: incrementQty">+</button>
+                  <!-- ko if: availableInFromBin() > 0 -->
+                  <button class="btn-max" data-bind="click: setMaxQty">MAX (<span data-bind="text: availableInFromBin()"></span>)</button>
+                  <!-- /ko -->
+                </div>
+              </div>
+
+              <!-- Commit Action Button -->
+              <button class="btn-commit-transfer" data-bind="click: commitTransfer, enable: canCommitTransfer">
+                <!-- ko if: isTransferring -->
+                <span class="spinner-inline"></span>
+                <span>SYNCING WITH NETSUITE...</span>
+                <!-- /ko -->
+                <!-- ko ifnot: isTransferring -->
+                <span>&#10003; COMMIT BIN TRANSFER</span>
+                <!-- /ko -->
+              </button>
+            </div>
+            <!-- /ko -->
+
+            <!-- Prompt if no item scanned yet -->
+            <!-- ko ifnot: selectedItem -->
+            <div class="idle-prompt-card">
+              <div class="scanner-target-icon">⌖</div>
+              <h3>Ready to Scan</h3>
+              <p>Aim handheld barcode scanner at item barcode or click a quick-test barcode tag above.</p>
+              <div class="guide-note">
+                <strong>Backend Demonstration:</strong>
+                <span>First scan hits mock NetSuite RESTlet (~300ms) and populates in-memory cache. Immediate re-scans return in &lt;5ms.</span>
+              </div>
+            </div>
+            <!-- /ko -->
+          </div>
+
+          <!-- Physical Device Grip / Keypad simulation bottom -->
+          <div class="device-bezel-bottom">
+            <div class="hardware-keys">
+              <button class="hw-key yellow-trigger" data-bind="click: function() { quickScan('SKU-1001'); }">SCAN ⚡</button>
+              <button class="hw-key" data-bind="click: resetForm">CLR</button>
+              <button class="hw-key" data-bind="click: function() { activeSubTab('inventory'); }">INV 📋</button>
+              <button class="hw-key" data-bind="click: function() { activeSubTab('telemetry'); }">LOG 📊</button>
+            </div>
+            <div class="device-speaker-grille">
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT COLUMN: BACKEND TELEMETRY, NETSUITE ERP DATABASE & ARCHITECTURE -->
+      <section class="backend-column">
+        <!-- Navigation Tabs -->
+        <nav class="backend-tabs">
+          <button class="tab-button" data-bind="click: function() { activeSubTab('telemetry'); }, css: { 'active': activeSubTab() === 'telemetry' }">
+            <span class="tab-icon">⚡</span>
+            <span>Live Telemetry & TBA Audit</span>
+          </button>
+          <button class="tab-button" data-bind="click: function() { activeSubTab('inventory'); }, css: { 'active': activeSubTab() === 'inventory' }">
+            <span class="tab-icon">🗄</span>
+            <span>NetSuite ERP Database (SQLite)</span>
+          </button>
+          <button class="tab-button" data-bind="click: function() { activeSubTab('architecture'); }, css: { 'active': activeSubTab() === 'architecture' }">
+            <span class="tab-icon">💡</span>
+            <span>Architectural Interview Blueprint</span>
+          </button>
+        </nav>
+
+        <!-- TAB 1: LIVE TELEMETRY & MIDDLEWARE AUDIT -->
+        <div class="tab-content" data-bind="visible: activeSubTab() === 'telemetry'">
+          <div class="panel-header-actions">
+            <div>
+              <h3>Middleware Request & NetSuite TBA Log</h3>
+              <p class="panel-subtitle">Observes scan caching, OAuth 1.0a HMAC-SHA256 headers, and RESTlet roundtrip timings.</p>
+            </div>
+            <div class="header-action-buttons">
+              <button class="btn-secondary" data-bind="click: flushCache">Flush Cache</button>
+              <button class="btn-secondary" data-bind="click: clearTelemetry">Clear Log</button>
+            </div>
+          </div>
+
+          <!-- Telemetry Feed -->
+          <div class="telemetry-feed" data-bind="foreach: telemetryLogs">
+            <div class="log-entry" data-bind="css: type">
+              <div class="log-head">
+                <span class="log-badge" data-bind="text: badge, css: badgeClass"></span>
+                <span class="log-title" data-bind="text: title"></span>
+                <span class="log-latency" data-bind="text: latency + 'ms'"></span>
+                <span class="log-time" data-bind="text: timestamp"></span>
+              </div>
+              <div class="log-body">
+                <p class="log-msg" data-bind="text: message"></p>
+                <!-- ko if: details -->
+                <pre class="log-code" data-bind="text: details"></pre>
+                <!-- /ko -->
+              </div>
+            </div>
+          </div>
+
+          <!-- ko if: telemetryLogs().length === 0 -->
+          <div class="empty-state">
+            <p>No telemetry events recorded yet. Trigger a barcode scan or transfer to view middleware metrics.</p>
+          </div>
+          <!-- /ko -->
+        </div>
+
+        <!-- TAB 2: NETSUITE ERP RELATIONAL DATABASE -->
+        <div class="tab-content" data-bind="visible: activeSubTab() === 'inventory'">
+          <div class="panel-header-actions">
+            <div>
+              <h3>NetSuite Inventory Balances by Bin</h3>
+              <p class="panel-subtitle">Direct view of simulated NetSuite relational database (<code>inventory_balances</code> joined with <code>items</code> and <code>bins</code>).</p>
+            </div>
+            <button class="btn-secondary" data-bind="click: fetchInventory">↻ Refresh ERP</button>
+          </div>
+
+          <div class="table-scroll-container">
+            <table class="inventory-table">
+              <thead>
+                <tr>
+                  <th>BIN NUMBER</th>
+                  <th>ITEM SKU</th>
+                  <th>DESCRIPTION</th>
+                  <th class="text-right">ON-HAND QTY</th>
+                  <th>ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody data-bind="foreach: inventoryList">
+                <tr>
+                  <td><span class="bin-tag" data-bind="text: bin_id"></span></td>
+                  <td><strong data-bind="text: sku"></strong></td>
+                  <td data-bind="text: displayname"></td>
+                  <td class="text-right font-mono font-bold" data-bind="text: qty_on_hand"></td>
+                  <td>
+                    <button class="table-action-btn" data-bind="click: function() { $root.quickScan(sku); }">Scan Item</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Transfer Transaction History -->
+          <div class="transfers-section">
+            <h4>Recent NetSuite Bin Transfer Transactions (<code>N/record.create('bintransfer')</code>)</h4>
+            <div class="table-scroll-container">
+              <table class="inventory-table">
+                <thead>
+                  <tr>
+                    <th>TRANSACTION ID</th>
+                    <th>ITEM SKU</th>
+                    <th>FROM BIN</th>
+                    <th>TO BIN</th>
+                    <th class="text-right">QUANTITY</th>
+                    <th>TIME</th>
+                    <th>STATUS</th>
+                  </tr>
+                </thead>
+                <tbody data-bind="foreach: transferHistory">
+                  <tr>
+                    <td><span class="tx-id-badge" data-bind="text: transfer_id"></span></td>
+                    <td data-bind="text: sku"></td>
+                    <td><span class="bin-source" data-bind="text: from_bin"></span></td>
+                    <td><span class="bin-dest" data-bind="text: to_bin"></span></td>
+                    <td class="text-right font-bold" data-bind="text: quantity"></td>
+                    <td class="font-mono text-sm" data-bind="text: created_at.substring(11, 19)"></td>
+                    <td><span class="status-committed" data-bind="text: status"></span></td>
+                  </tr>
+                </tbody>
+              </table>
+              <!-- ko if: transferHistory().length === 0 -->
+              <p class="empty-hint">No transfers committed yet in this session.</p>
+              <!-- /ko -->
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: ARCHITECTURE & INTERVIEW STUDY GUIDE -->
+        <div class="tab-content" data-bind="visible: activeSubTab() === 'architecture'">
+          <div class="panel-header-actions">
+            <div>
+              <h3>RF-SMART Architectural Interview Blueprint</h3>
+              <p class="panel-subtitle">Key engineering patterns and talking points for Cedrick's upcoming rounds.</p>
+            </div>
+          </div>
+
+          <div class="study-cards-grid">
+            <div class="study-card">
+              <div class="card-icon">⚡</div>
+              <h4>Why Node.js Middleware in Front of NetSuite?</h4>
+              <ul>
+                <li><strong>Absorb High-Throughput Burst Traffic:</strong> Warehouse scanners scan continuously (thousands of scans/minute). NetSuite ERP has strict concurrency throttles and concurrency governance units per account.</li>
+                <li><strong>Sub-20ms Latency:</strong> In-memory caching avoids repetitive 300ms cloud ERP roundtrips on repeated SKU/Bin checks.</li>
+                <li><strong>Edge Concurrency Control:</strong> Mutex queueing in middleware serializes simultaneous worker picks on the same bin, preventing database deadlock.</li>
+                <li><strong>Error Normalization:</strong> Translates cryptic NetSuite SuiteScript errors (e.g. <code>INSUFFICIENT_INVENTORY_IN_BIN</code>) into instant, clear messages.</li>
+              </ul>
+            </div>
+
+            <div class="study-card">
+              <div class="card-icon">🔐</div>
+              <h4>NetSuite Token-Based Auth (TBA / RFC 5849)</h4>
+              <ul>
+                <li><strong>HMAC-SHA256 OAuth 1.0a:</strong> NetSuite RESTlets authenticate each request using signed headers rather than passing plaintext passwords or simple bearer tokens.</li>
+                <li><strong>Signature Base String:</strong> Combines HTTP Method + Normalized Endpoint URL + Lexicographically sorted parameters (Consumer Key, Token ID, Nonce, Timestamp).</li>
+                <li><strong>Replay Attack Prevention:</strong> Nonces and timestamp windows ensure intercepted headers cannot be replayed by bad actors on warehouse Wi-Fi.</li>
+              </ul>
+            </div>
+
+            <div class="study-card">
+              <div class="card-icon">⚙️</div>
+              <h4>SuiteScript 2.1 AMD Module Anatomy</h4>
+              <ul>
+                <li><strong>AMD Define Pattern:</strong> <code>define(['N/record', 'N/search', 'N/error'], function(record, search, error) { ... })</code>.</li>
+                <li><strong>N/record Dynamic Mode:</strong> Uses <code>record.create({ type: 'bintransfer', isDynamic: true })</code>, <code>selectNewLine()</code>, <code>setCurrentSublistValue()</code>, and <code>commitLine()</code>.</li>
+                <li><strong>Atomic Commitment:</strong> Changes only update ERP ledgers once <code>record.save()</code> completes successfully.</li>
+              </ul>
+            </div>
+
+            <div class="study-card">
+              <div class="card-icon">🔄</div>
+              <h4>Knockout.js MVVM vs. React Mental Model</h4>
+              <ul>
+                <li><strong>Observables vs State:</strong> <code>ko.observable(val)</code> is an accessor function: call <code>val()</code> to read, <code>val(newVal)</code> to write. React uses <code>[val, setVal]</code> tuples.</li>
+                <li><strong>Automatic Dependency Tracking:</strong> <code>ko.computed</code> automatically tracks whatever observables are read inside its evaluator during execution—no manual React dependency array needed.</li>
+                <li><strong>Fine-Grained DOM Updates:</strong> Knockout surgically mutates only the specific text node or attribute subscribed to the observable without virtual DOM diffing or full component re-rendering.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
