@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RF-SMART Code Studio & Architecture Explorer</title>
+  <link rel="stylesheet" href="/code.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Prism.js Syntax Highlighting CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.css">
+</head>
+<body>
+  <div class="ide-container">
+    <!-- Top IDE Navigation Bar -->
+    <header class="ide-header">
+      <div class="header-left">
+        <div class="ide-logo">
+          <span class="logo-box">RF</span>
+          <span class="ide-title">Code Studio</span>
+        </div>
+        <span class="version-tag">PORT 7370 &bull; LIVE</span>
+      </div>
+
+      <div class="header-center">
+        <div class="active-file-breadcrumb" id="breadcrumbDisplay">
+          <span>Loading project tree...</span>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <button class="btn-action" id="copyCodeBtn" title="Copy code to clipboard">
+          📋 Copy Code
+        </button>
+        <button class="btn-action" id="togglePlaygroundBtn" title="Toggle Live API Test Console">
+          ⚡ API Console
+        </button>
+        <a href="/" target="_blank" class="btn-primary-link" title="Open Mobile Scanner in a separate window">
+          📱 Open Scanner UI &nearr;
+        </a>
+      </div>
+    </header>
+
+    <!-- Main Workspace: Sidebar + Editor -->
+    <div class="ide-workspace">
+      <!-- LEFT SIDEBAR: FILE EXPLORER -->
+      <aside class="ide-sidebar">
+        <div class="sidebar-header">
+          <span class="sidebar-title">PROJECT EXPLORER</span>
+          <span class="files-count" id="filesCountBadge">0 files</span>
+        </div>
+
+        <div class="search-box">
+          <input type="text" id="fileSearchInput" placeholder="Filter files (e.g. auth, nRecord)..." autocomplete="off" />
+        </div>
+
+        <div class="file-tree-container" id="fileTreeContainer">
+          <!-- Populated dynamically via code.js -->
+        </div>
+
+        <!-- Architecture Quick-Nav Shortcut -->
+        <div class="sidebar-footer">
+          <span class="footer-lbl">Architecture Stack:</span>
+          <div class="stack-badges">
+            <span class="badge badge-node">Node.js</span>
+            <span class="badge badge-ns">SuiteScript 2.1</span>
+            <span class="badge badge-ko">Knockout.js</span>
+            <span class="badge badge-sql">SQLite</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- CENTER / RIGHT: CODE VIEWER & ARCHITECTURE EXPLAINER -->
+      <main class="ide-editor-area">
+        <!-- Open File Tabs Bar -->
+        <div class="editor-tabs-bar" id="editorTabsBar">
+          <!-- Dynamically populated open tabs -->
+        </div>
+
+        <!-- Architectural Context Card -->
+        <div class="context-card" id="contextCard">
+          <div class="context-header">
+            <span class="context-layer-badge" id="contextLayerBadge">MIDDLEWARE</span>
+            <h2 class="context-file-name" id="contextFileName">File Overview</h2>
+          </div>
+          <p class="context-desc" id="contextFileDesc">Select a file to inspect its source code and architectural purpose.</p>
+        </div>
+
+        <!-- Code Content with Line Numbers -->
+        <div class="code-viewport">
+          <div class="code-loading-overlay" id="loadingOverlay">
+            <div class="spinner"></div>
+            <span>Loading source file...</span>
+          </div>
+          <pre class="line-numbers"><code id="codeViewer" class="language-javascript">// Select a file from the explorer on the left...</code></pre>
+        </div>
+
+        <!-- BOTTOM DRAWER: LIVE API & SUITESCRIPT PLAYGROUND -->
+        <div class="playground-drawer" id="playgroundDrawer">
+          <div class="drawer-header">
+            <div class="drawer-title">
+              <span class="drawer-dot"></span>
+              <strong>Live Middleware & SuiteScript API Playground</strong>
+              <span class="drawer-sub">Test endpoints directly against port 7370</span>
+            </div>
+            <button class="btn-close-drawer" id="closeDrawerBtn">&times;</button>
+          </div>
+
+          <div class="drawer-content">
+            <div class="test-controls-row">
+              <div class="test-field-group">
+                <label>1. Test Barcode Lookup (GET /api/scanner/lookup):</label>
+                <div class="inline-input-group">
+                  <input type="text" id="testBarcodeInput" value="SKU-1001" placeholder="Enter barcode..." />
+                  <button class="btn-test-submit" id="runLookupTestBtn">Execute Lookup</button>
+                </div>
+              </div>
+
+              <div class="test-field-group">
+                <label>2. Quick Actions:</label>
+                <div class="quick-test-btns">
+                  <button class="btn-quick-test" data-barcode="SKU-1001">SKU-1001 (Zebra)</button>
+                  <button class="btn-quick-test" data-barcode="SKU-1002">SKU-1002 (Honeywell)</button>
+                  <button class="btn-quick-test" data-barcode="(01)00012345678901(30)5">GS1-128 AI</button>
+                  <button class="btn-quick-test" data-barcode="INVALID-999">Test 404</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="response-viewer">
+              <div class="res-head">
+                <span class="res-badge" id="resStatusBadge">READY</span>
+                <span class="res-latency" id="resLatencyDisplay">Latency: --</span>
+                <span class="res-tba font-mono" id="resTbaDisplay">TBA: --</span>
+              </div>
+              <pre class="res-body font-mono" id="resBodyDisplay">// Click "Execute Lookup" or a quick test button above to inspect live middleware response...</pre>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Prism.js Scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markdown.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+
+  <script src="/code.js"></script>
+</body>
+</html>

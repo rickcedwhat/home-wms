@@ -10,6 +10,7 @@ import cors from 'cors';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import scannerRouter from './routes/scanner.js';
+import ideRouter from './routes/ide.js';
 import { getDatabase } from './netsuite-mock/db.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -37,10 +38,16 @@ app.use((req, res, next) => {
   next();
 });
 
-// Mount Scanner Middleware API
+// Mount APIs
 app.use('/api/scanner', scannerRouter);
+app.use('/api/ide', ideRouter);
 
-// Serve Frontend SPA
+// Dedicated route for In-Browser IDE / Code Studio
+app.get(['/code', '/ide'], (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'code.html'));
+});
+
+// Serve Frontend SPA static assets
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Fallback for SPA routing
