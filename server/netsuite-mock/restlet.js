@@ -63,11 +63,18 @@ async function get(context) {
       status: 'SUCCESS',
       data: {
         itemId: itemData.itemid,
+        itemid: itemData.itemid,
         sku: itemData.sku,
         displayName: itemData.displayname,
+        displayname: itemData.displayname,
         upc: itemData.upc,
         totalQty: itemData.total_qty,
-        bins: itemData.bins || []
+        image_url: itemData.image_url || null,
+        notes: itemData.notes || null,
+        bins: (itemData.bins || []).map(b => ({
+          ...b,
+          display_label: b.display_label || b.bin_id
+        }))
       }
     };
   }

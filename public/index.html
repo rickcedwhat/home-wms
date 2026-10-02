@@ -2,296 +2,369 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RF-SMART Mobile Data Capture & Warehouse Environment</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>RF-SMART Kitchen</title>
   <link rel="stylesheet" href="/styles.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <!-- Knockout.js CDN -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.5.1/knockout-latest.js"></script>
 </head>
 <body>
-  <div class="app-layout">
-    <!-- Top System Header -->
-    <header class="top-nav">
-      <div class="nav-brand">
-        <span class="brand-pill">RF-SMART</span>
-        <span class="nav-title">Warehouse Scanner Simulator</span>
+
+<!-- App Shell -->
+<div id="app">
+
+  <!-- ─── Navigation Bar ─── -->
+  <nav class="app-nav">
+    <div class="nav-brand">
+      <span class="nav-logo">RF</span>
+      <span class="nav-title" data-bind="text: currentPageTitle">Kitchen Inventory</span>
+    </div>
+    <div class="nav-actions">
+      <!-- ko if: currentPage() === 'scan' -->
+      <button class="nav-btn" data-bind="click: openAddItem" title="Add item manually">＋</button>
+      <!-- /ko -->
+      <!-- ko if: currentPage() !== 'scan' -->
+      <button class="nav-btn" data-bind="click: goToScan">📷</button>
+      <!-- /ko -->
+    </div>
+  </nav>
+
+  <!-- ─── Bottom Tab Bar ─── -->
+  <nav class="tab-bar">
+    <button class="tab-btn" data-bind="css: { active: currentPage() === 'scan' }, click: goToScan">
+      <span>📷</span>
+      <label>Scan</label>
+    </button>
+    <button class="tab-btn" data-bind="css: { active: currentPage() === 'inventory' }, click: goToInventory">
+      <span>📦</span>
+      <label>Inventory</label>
+    </button>
+    <button class="tab-btn" data-bind="css: { active: currentPage() === 'locations' }, click: goToLocations">
+      <span>🗂</span>
+      <label>Locations</label>
+    </button>
+    <button class="tab-btn" data-bind="css: { active: currentPage() === 'history' }, click: goToHistory">
+      <span>🕒</span>
+      <label>History</label>
+    </button>
+  </nav>
+
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE: SCAN
+  ════════════════════════════════════════════════════════════ -->
+  <!-- ko if: currentPage() === 'scan' -->
+  <div class="page page-scan">
+
+    <!-- Camera Viewfinder -->
+    <div class="scanner-viewport" data-bind="css: { active: cameraActive() }">
+      <video id="scanVideo" autoplay playsinline muted></video>
+      <div class="scan-overlay">
+        <div class="scan-reticle"></div>
+        <p class="scan-hint" data-bind="visible: !cameraActive()">Tap to activate camera</p>
+        <p class="scan-hint" data-bind="visible: cameraActive()">Point at a barcode</p>
       </div>
-      <div class="nav-links">
-        <span class="status-indicator"><span class="dot"></span> Middleware Ready :7370</span>
-        <button class="btn-sound" data-bind="click: toggleSound, css: { 'muted': !soundEnabled() }">
-          <span data-bind="text: soundEnabled() ? '🔊 Audio ON' : '🔇 Audio OFF'"></span>
-        </button>
-        <a href="/code" target="_blank" class="nav-ide-btn" title="Open Code Studio in side window">
-          💻 Code Studio &nearr;
-        </a>
+      <canvas id="scanCanvas" style="display:none"></canvas>
+    </div>
+
+    <!-- Controls: Camera Toggle + Manual Entry -->
+    <div class="scan-controls">
+      <button class="btn-camera" data-bind="click: toggleCamera, css: { active: cameraActive() }">
+        <!-- ko if: !cameraActive() -->📷 Start Camera<!-- /ko -->
+        <!-- ko if: cameraActive() -->⏹ Stop Camera<!-- /ko -->
+      </button>
+      <span class="scan-divider">or</span>
+      <div class="barcode-input-row">
+        <input type="text" id="manualBarcodeInput" class="barcode-input"
+          placeholder="Type / scan barcode…"
+          data-bind="value: manualBarcode, valueUpdate: 'input',
+                     event: { keydown: onBarcodeKeydown }"
+          autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <button class="btn-lookup" data-bind="click: lookupManual">Go</button>
       </div>
-    </header>
+    </div>
 
-    <!-- Main Workspace: Mobile Scanner on Left, Vertical Warehouse Bins on Right -->
-    <main class="sim-grid">
-      
-      <!-- ============================================================== -->
-      <!-- LEFT: RUGGED MOBILE TERMINAL (Runs the actual warehouse software) -->
-      <!-- ============================================================== -->
-      <section class="scanner-section">
-        <div class="scanner-chassis" data-bind="css: { 'flash-ok': flashSuccess(), 'flash-bad': flashError() }">
-          
-          <!-- Terminal Status Bar -->
-          <div class="terminal-statusbar">
-            <span class="term-dev font-mono">ZEBRA TC52</span>
-            <span class="term-wifi font-mono">Wi-Fi: AP-03</span>
-            <span class="term-user font-mono">CCATALAN</span>
-          </div>
+    <!-- Scan Status Toast -->
+    <!-- ko if: scanStatus() -->
+    <div class="scan-toast" data-bind="css: scanStatusClass()">
+      <span data-bind="text: scanStatus()"></span>
+    </div>
+    <!-- /ko -->
 
-          <!-- Active App Interface -->
-          <div class="terminal-app">
-            <div class="app-topbar">
-              <div class="app-title-group">
-                <h2>BIN TRANSFER</h2>
-                <span class="app-subtitle">RF-SMART Mobile v4.2</span>
-              </div>
-              <button class="btn-clear" data-bind="click: resetForm">Clear</button>
-            </div>
-
-            <!-- Feedback Toast -->
-            <div class="scan-feedback" data-bind="visible: feedbackMessage, css: feedbackType">
-              <span class="feedback-icon" data-bind="text: feedbackType() === 'success' ? '✓' : '⚠'"></span>
-              <span class="feedback-text" data-bind="text: feedbackMessage"></span>
-            </div>
-
-            <!-- Input Field: Always ready to receive barcode from physical world -->
-            <div class="scan-bar-container">
-              <label for="barcodeInput" class="scan-bar-label">
-                <span>BARCODE INPUT</span>
-                <span class="label-hint">Ready to Scan</span>
-              </label>
-              <div class="scan-bar-input-group">
-                <svg class="scan-icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M2 5h2v14H2V5zm4 0h1v14H6V5zm3 0h2v14H9V5zm4 0h1v14h-1V5zm3 0h2v14h-2V5zm4 0h2v14h-2V5z"/>
-                </svg>
-                <input 
-                  id="barcodeInput"
-                  type="text" 
-                  class="scanner-input font-mono"
-                  placeholder="Scan item or bin barcode..." 
-                  data-bind="textInput: scannedBarcode, event: { keyup: handleBarcodeKeypress }"
-                  autocomplete="off"
-                  autofocus
-                />
-                <!-- ko if: isProcessing -->
-                <div class="spinner-small"></div>
-                <!-- /ko -->
-              </div>
-            </div>
-
-            <!-- STATE A: Active Item Scanned & Transfer Workflow -->
-            <!-- ko if: selectedItem -->
-            <div class="active-item-panel" data-bind="with: selectedItem">
-              <div class="item-tag-row">
-                <span class="sku-pill font-mono" data-bind="text: sku"></span>
-                <span class="stock-pill font-mono" data-bind="text: totalQty + ' total in WH'"></span>
-              </div>
-              <h3 class="item-display-name" data-bind="text: displayName"></h3>
-              
-              <!-- Available Bins for this Item -->
-              <div class="item-locations">
-                <span class="section-label">SOURCE BIN:</span>
-                <div class="source-bins-list" data-bind="foreach: bins">
-                  <button class="bin-select-btn font-mono" data-bind="click: function() { $root.selectSourceBin(bin_id); }, css: { 'selected': $root.fromBin() === bin_id }">
-                    <span class="bin-num" data-bind="text: bin_id"></span>
-                    <span class="bin-stock" data-bind="text: qty_on_hand + ' avail'"></span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Transfer Configuration Form -->
-            <div class="transfer-form-panel">
-              <div class="bin-routing-row">
-                <div class="routing-box">
-                  <span class="route-label">FROM (SOURCE)</span>
-                  <select class="clean-select font-mono" data-bind="options: sourceBinOptions, value: fromBin, optionsCaption: '-- Source Bin --'"></select>
-                </div>
-                <div class="routing-arrow">&rarr;</div>
-                <div class="routing-box">
-                  <span class="route-label">TO (DESTINATION)</span>
-                  <select class="clean-select font-mono" data-bind="options: destBinOptions, value: toBin, optionsCaption: '-- Destination --'"></select>
-                </div>
-              </div>
-
-              <!-- Qty Stepper -->
-              <div class="qty-row">
-                <span class="route-label">TRANSFER QUANTITY</span>
-                <div class="stepper">
-                  <button class="step-btn" data-bind="click: decrementQty">&minus;</button>
-                  <input type="number" class="qty-field font-mono" min="1" data-bind="textInput: transferQty" />
-                  <button class="step-btn" data-bind="click: incrementQty">+</button>
-                  <!-- ko if: availableInFromBin() > 0 -->
-                  <button class="btn-max-qty font-mono" data-bind="click: setMaxQty">MAX (<span data-bind="text: availableInFromBin()"></span>)</button>
-                  <!-- /ko -->
-                </div>
-              </div>
-
-              <!-- Commit Transfer Action -->
-              <button class="btn-commit" data-bind="click: commitTransfer, enable: canCommitTransfer">
-                <!-- ko if: isTransferring -->
-                <span class="spinner-small"></span>
-                <span>SYNCING WITH NETSUITE...</span>
-                <!-- /ko -->
-                <!-- ko ifnot: isTransferring -->
-                <span>&#10003; COMMIT BIN TRANSFER</span>
-                <!-- /ko -->
-              </button>
-            </div>
-            <!-- /ko -->
-
-            <!-- STATE B: Idle / Awaiting Scan -->
-            <!-- ko ifnot: selectedItem -->
-            <div class="scanner-idle-placeholder">
-              <div class="laser-reticle">⌖</div>
-              <h3>Ready to Scan</h3>
-              <p>Click any square item package in the warehouse racks on the right to scan it into this device.</p>
-            </div>
-            <!-- /ko -->
-
-          </div>
-        </div>
-      </section>
-
-      <!-- ============================================================== -->
-      <!-- RIGHT: VERTICAL STORAGE BINS & REAL-WORLD INVENTORY            -->
-      <!-- ============================================================== -->
-      <section class="warehouse-section">
-        
-        <!-- Warehouse Navigation / Header Bar -->
-        <div class="wh-nav-bar">
-          <div class="wh-nav-left">
-            <span class="warehouse-tag">📍 EAST WAREHOUSE RACK (LOC-EAST-WH)</span>
-          </div>
-          <div class="wh-nav-tabs">
-            <button class="wh-tab-btn" data-bind="click: function() { activeViewTab('items'); }, css: { 'active': activeViewTab() === 'items' }">
-              Vertical Storage Bins
-            </button>
-            <button class="wh-tab-btn" data-bind="click: function() { activeViewTab('activity'); }, css: { 'active': activeViewTab() === 'activity' }">
-              Activity Feed
-            </button>
-          </div>
-        </div>
-
-        <!-- VIEW 1: VERTICAL STORAGE BINS (OPEN / CLOSE & SQUARE ITEMS) -->
-        <div class="wh-panel" data-bind="visible: activeViewTab() === 'items'">
-          
-          <!-- Rack Controls Bar -->
-          <div class="rack-controls-bar">
-            <div class="rack-summary-text">
-              <span>Click any bin to open/close. Click a square item to scan it into the handheld terminal.</span>
-            </div>
-            <div class="rack-action-buttons">
-              <button class="btn-rack-util" data-bind="click: expandAllBins">Expand All</button>
-              <button class="btn-rack-util" data-bind="click: collapseAllBins">Collapse All</button>
-            </div>
-          </div>
-
-          <!-- Vertical Bins Rack Column -->
-          <div class="vertical-bins-rack" data-bind="foreach: warehouseRack">
-            <div class="bin-shelf" data-bind="css: { 'bin-is-open': isOpen(), 'bin-is-target': isTarget(), 'bin-is-source': isSource() }">
-              
-              <!-- Bin Header Bar (Click to Open/Close) -->
-              <div class="shelf-header" data-bind="click: $root.toggleBin">
-                <div class="shelf-header-left">
-                  <span class="shelf-chevron font-mono" data-bind="text: isOpen() ? '▼' : '▶'"></span>
-                  <span class="shelf-plate font-mono" data-bind="text: binId"></span>
-                  <span class="shelf-desc" data-bind="text: aisle + ' • ' + zone"></span>
-                </div>
-                
-                <div class="shelf-header-right">
-                  <!-- How many units are in this location -->
-                  <span class="shelf-count font-mono" data-bind="text: totalUnits + ' units (' + itemCount + ' SKUs)'"></span>
-
-                  <!-- Quick target button when an item is active on the scanner -->
-                  <!-- ko if: $root.selectedItem() && $root.fromBin() !== binId -->
-                  <button class="btn-shelf-action font-mono" data-bind="click: function(d, e) { e.stopPropagation(); $root.setDestinationBin(binId); }, css: { 'active-target': isTarget() }">
-                    <span data-bind="text: isTarget() ? '✓ Target Bin' : 'Move Here &rarr;'"></span>
-                  </button>
-                  <!-- /ko -->
-                </div>
-              </div>
-
-              <!-- Bin Shelf Contents (Open/Closed) -->
-              <!-- ko if: isOpen -->
-              <div class="shelf-content">
-                <!-- Square Items Grid -->
-                <!-- ko if: items.length > 0 -->
-                <div class="square-items-row" data-bind="foreach: items">
-                  <div class="square-item-box" data-bind="click: function() { $root.selectItemFromBin($data, $parent.binId); }, css: { 'active-box': $root.selectedItem() && $root.selectedItem().sku === sku && $root.fromBin() === $parent.binId }">
-                    <div class="box-top">
-                      <span class="box-icon" data-bind="text: $root.getItemIcon(sku)"></span>
-                      <span class="box-qty-badge font-mono" data-bind="text: qty_on_hand"></span>
-                    </div>
-                    <strong class="box-sku font-mono" data-bind="text: sku"></strong>
-                    <span class="box-name" data-bind="text: displayname"></span>
-                    <span class="box-action-hint">Click to Scan</span>
-                  </div>
-                </div>
-                <!-- /ko -->
-
-                <!-- Empty Bin Notice -->
-                <!-- ko if: items.length === 0 -->
-                <div class="empty-shelf-notice">
-                  <span class="empty-icon">📭</span>
-                  <span class="empty-text">Empty Shelf &bull; 0 items</span>
-                  <!-- ko if: $root.selectedItem() && $root.fromBin() !== binId -->
-                  <button class="btn-empty-target font-mono" data-bind="click: function() { $root.setDestinationBin(binId); }">
-                    Set as Destination Bin
-                  </button>
-                  <!-- /ko -->
-                </div>
-                <!-- /ko -->
-              </div>
-              <!-- /ko -->
-
-            </div>
-          </div>
-        </div>
-
-        <!-- VIEW 2: ACTIVITY FEED -->
-        <div class="wh-panel" data-bind="visible: activeViewTab() === 'activity'">
-          <div class="wh-panel-header">
-            <div>
-              <h3>Middleware & NetSuite Activity Feed</h3>
-              <p>Real-time log of scans, cache hits (&lt;5ms), and NetSuite TBA transfers</p>
-            </div>
-            <button class="btn-subtle" data-bind="click: clearTelemetry">Clear Feed</button>
-          </div>
-
-          <div class="activity-timeline" data-bind="foreach: telemetryLogs">
-            <div class="timeline-row" data-bind="css: type">
-              <span class="t-badge font-mono" data-bind="text: badge, css: badgeClass"></span>
-              <div class="t-details">
-                <div class="t-title-row">
-                  <strong data-bind="text: title"></strong>
-                  <span class="t-time font-mono" data-bind="text: timestamp"></span>
-                </div>
-                <span class="t-msg" data-bind="text: message"></span>
-              </div>
-              <span class="t-latency font-mono" data-bind="text: latency + 'ms'"></span>
-            </div>
-          </div>
-
-          <!-- ko if: telemetryLogs().length === 0 -->
-          <div class="empty-feed">
-            <p>No transactions yet. Scan a package in the warehouse to start logging.</p>
-          </div>
+    <!-- Scan Result Card -->
+    <!-- ko if: scannedItem() -->
+    <div class="result-card" data-bind="css: { 'result-new': scannedItem().isNew }">
+      <div class="result-card-inner">
+        <div class="result-image-col">
+          <!-- ko if: scannedItem().image_url -->
+          <img class="item-photo" data-bind="attr: { src: scannedItem().image_url }">
+          <!-- /ko -->
+          <!-- ko ifnot: scannedItem().image_url -->
+          <div class="item-photo-placeholder">📦</div>
           <!-- /ko -->
         </div>
+        <div class="result-info-col">
+          <h3 class="result-name" data-bind="text: scannedItem().displayName || scannedItem().displayname"></h3>
+          <p class="result-sku" data-bind="text: scannedItem().upc"></p>
+          <!-- ko if: scannedItem().bins && scannedItem().bins.length > 0 -->
+          <div class="result-bins">
+            <!-- ko foreach: scannedItem().bins -->
+            <span class="bin-chip">
+              <span data-bind="text: display_label || bin_id"></span>
+              <strong data-bind="text: qty_on_hand"></strong>
+            </span>
+            <!-- /ko -->
+          </div>
+          <!-- /ko -->
+          <!-- ko if: !scannedItem().bins || scannedItem().bins.length === 0 -->
+          <p class="result-no-location">Not in any location</p>
+          <!-- /ko -->
+        </div>
+      </div>
 
-      </section>
-    </main>
+      <!-- Actions -->
+      <div class="result-actions">
+        <!-- ko ifnot: scannedItem().isNew -->
+        <button class="btn-action btn-move" data-bind="click: openTransfer">
+          📍 Move to Location
+        </button>
+        <!-- /ko -->
+        <!-- ko if: scannedItem().isNew -->
+        <button class="btn-action btn-add" data-bind="click: openAddItem">
+          ➕ Add This Item
+        </button>
+        <!-- /ko -->
+        <button class="btn-action btn-secondary" data-bind="click: clearScan">✕ Clear</button>
+      </div>
+    </div>
+    <!-- /ko -->
+
+    <!-- Empty state when no scan yet -->
+    <!-- ko if: !scannedItem() && !scanStatus() -->
+    <div class="empty-scan">
+      <div class="empty-icon">🔍</div>
+      <p>Scan a barcode or type one in above.</p>
+      <p class="empty-sub">Items not in the system can be added.</p>
+    </div>
+    <!-- /ko -->
+
   </div>
+  <!-- /ko -->
 
-  <script src="/app.js"></script>
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE: INVENTORY
+  ════════════════════════════════════════════════════════════ -->
+  <!-- ko if: currentPage() === 'inventory' -->
+  <div class="page page-inventory">
+    <div class="page-toolbar">
+      <input type="search" placeholder="Search items…" class="search-bar"
+        data-bind="value: inventorySearch, valueUpdate: 'input'">
+    </div>
+    <!-- ko if: inventoryLoading() -->
+    <div class="loading-msg">Loading…</div>
+    <!-- /ko -->
+    <!-- ko ifnot: inventoryLoading() -->
+    <div class="item-list" data-bind="foreach: filteredInventoryItems">
+      <div class="item-row" data-bind="click: $parent.selectInventoryItem.bind($parent, $data)">
+        <!-- ko if: image_url -->
+        <img class="item-thumb" data-bind="attr: { src: image_url }">
+        <!-- /ko -->
+        <!-- ko ifnot: image_url -->
+        <div class="item-thumb-placeholder">📦</div>
+        <!-- /ko -->
+        <div class="item-row-info">
+          <strong data-bind="text: displayname"></strong>
+          <span class="item-row-upc" data-bind="text: upc"></span>
+        </div>
+        <div class="item-row-qty" data-bind="text: total_qty + ' in stock'"></div>
+      </div>
+    </div>
+    <!-- ko if: filteredInventoryItems().length === 0 -->
+    <div class="empty-list">No items found</div>
+    <!-- /ko -->
+    <!-- /ko -->
+  </div>
+  <!-- /ko -->
+
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE: LOCATIONS (Bins / Kitchen)
+  ════════════════════════════════════════════════════════════ -->
+  <!-- ko if: currentPage() === 'locations' -->
+  <div class="page page-locations">
+    <div class="location-grid" data-bind="foreach: kitchenBins">
+      <div class="location-card" data-bind="click: $parent.openLocation.bind($parent, $data)">
+        <div class="location-emoji" data-bind="text: display_label ? display_label.split(' ')[0] : '📦'"></div>
+        <div class="location-info">
+          <strong data-bind="text: display_label || binnumber"></strong>
+          <span data-bind="text: zone"></span>
+        </div>
+        <div class="location-arrow">›</div>
+      </div>
+    </div>
+
+    <!-- Printable bin barcodes link -->
+    <a href="/print-bins" target="_blank" class="print-link">🖨 Print Location Barcodes</a>
+  </div>
+  <!-- /ko -->
+
+  <!-- ═══════════════════════════════════════════════════════
+       PAGE: HISTORY
+  ════════════════════════════════════════════════════════════ -->
+  <!-- ko if: currentPage() === 'history' -->
+  <div class="page page-history">
+    <!-- ko if: transferHistory().length === 0 -->
+    <div class="empty-list">No transfers yet</div>
+    <!-- /ko -->
+    <div class="history-list" data-bind="foreach: transferHistory">
+      <div class="history-row">
+        <div class="history-row-main">
+          <strong data-bind="text: displayname"></strong>
+          <span class="history-move" data-bind="text: from_bin + ' → ' + to_bin"></span>
+        </div>
+        <div class="history-row-meta">
+          <span class="history-qty" data-bind="text: 'x' + quantity"></span>
+          <span class="history-date" data-bind="text: $parent.formatDate(tran_date)"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- /ko -->
+
+</div><!-- #app -->
+
+
+<!-- ═══════════════════════════════════════════════════════
+     MODAL: ADD / EDIT ITEM
+════════════════════════════════════════════════════════════ -->
+<div class="modal-backdrop" data-bind="visible: showAddItemModal(), click: closeAllModals"></div>
+<div class="modal" data-bind="visible: showAddItemModal()">
+  <div class="modal-header">
+    <h2>Add Item to Inventory</h2>
+    <button class="modal-close" data-bind="click: closeAllModals">✕</button>
+  </div>
+  <div class="modal-body">
+    <label class="field-label">Barcode / UPC *</label>
+    <input type="text" class="field-input" placeholder="012345678901"
+      data-bind="value: newItem.upc, valueUpdate: 'input'"
+      inputmode="numeric" autocomplete="off">
+
+    <label class="field-label">Item Name *</label>
+    <input type="text" class="field-input" placeholder="e.g. Heinz Ketchup 32oz"
+      data-bind="value: newItem.displayname, valueUpdate: 'input'">
+
+    <label class="field-label">Notes (optional)</label>
+    <input type="text" class="field-input" placeholder="e.g. Refrigerate after opening"
+      data-bind="value: newItem.notes, valueUpdate: 'input'">
+
+    <label class="field-label">Photo (optional)</label>
+    <div class="photo-picker">
+      <!-- ko if: newItem.previewUrl() -->
+      <img class="photo-preview" data-bind="attr: { src: newItem.previewUrl() }">
+      <!-- /ko -->
+      <label class="btn-photo-pick">
+        <!-- ko if: !newItem.previewUrl() -->📷 Take / Choose Photo<!-- /ko -->
+        <!-- ko if: newItem.previewUrl() -->🔄 Change Photo<!-- /ko -->
+        <input type="file" accept="image/*" capture="environment" id="photoFileInput"
+          data-bind="event: { change: newItem.pickPhoto }">
+      </label>
+    </div>
+
+    <label class="field-label">Starting Location</label>
+    <select class="field-select" data-bind="value: newItem.startBin, options: kitchenBins,
+      optionsText: function(b) { return (b.display_label || b.binnumber) },
+      optionsValue: 'binnumber', optionsCaption: '— None —'"></select>
+
+    <label class="field-label" data-bind="visible: newItem.startBin()">Starting Quantity</label>
+    <input type="number" class="field-input" min="1" value="1"
+      data-bind="value: newItem.startQty, visible: newItem.startBin()">
+  </div>
+  <div class="modal-footer">
+    <button class="btn-cancel" data-bind="click: closeAllModals">Cancel</button>
+    <button class="btn-submit" data-bind="click: submitNewItem, enable: newItem.isValid()">
+      ✓ Add Item
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     MODAL: TRANSFER (Move to Location)
+════════════════════════════════════════════════════════════ -->
+<div class="modal-backdrop" data-bind="visible: showTransferModal(), click: closeAllModals"></div>
+<div class="modal" data-bind="visible: showTransferModal()">
+  <div class="modal-header">
+    <h2>Move to Location</h2>
+    <button class="modal-close" data-bind="click: closeAllModals">✕</button>
+  </div>
+  <!-- ko if: transferTarget() -->
+  <div class="modal-body">
+    <div class="transfer-item-preview">
+      <!-- ko if: transferTarget().image_url -->
+      <img class="item-thumb" data-bind="attr: { src: transferTarget().image_url }">
+      <!-- /ko -->
+      <strong data-bind="text: transferTarget().displayName || transferTarget().displayname"></strong>
+    </div>
+
+    <label class="field-label">From Location *</label>
+    <select class="field-select" data-bind="value: transferForm.fromBin,
+      options: transferableBins(), optionsText: function(b){ return b.label },
+      optionsValue: 'id', optionsCaption: '— Select source —'"></select>
+
+    <label class="field-label">To Location *</label>
+    <select class="field-select" data-bind="value: transferForm.toBin,
+      options: kitchenBins,
+      optionsText: function(b){ return b.display_label || b.binnumber },
+      optionsValue: 'binnumber', optionsCaption: '— Select destination —'"></select>
+
+    <label class="field-label">Quantity *</label>
+    <input type="number" class="field-input" min="1"
+      data-bind="value: transferForm.quantity">
+  </div>
+  <!-- /ko -->
+  <div class="modal-footer">
+    <button class="btn-cancel" data-bind="click: closeAllModals">Cancel</button>
+    <button class="btn-submit" data-bind="click: submitTransfer, enable: transferFormValid()">
+      📍 Confirm Move
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     MODAL: LOCATION DETAIL
+════════════════════════════════════════════════════════════ -->
+<div class="modal-backdrop" data-bind="visible: showLocationModal(), click: closeAllModals"></div>
+<div class="modal" data-bind="visible: showLocationModal()">
+  <!-- ko if: selectedLocation() -->
+  <div class="modal-header">
+    <h2 data-bind="text: selectedLocation().display_label || selectedLocation().binnumber"></h2>
+    <button class="modal-close" data-bind="click: closeAllModals">✕</button>
+  </div>
+  <div class="modal-body">
+    <div class="location-items" data-bind="foreach: locationItems()">
+      <div class="location-item-row">
+        <!-- ko if: image_url -->
+        <img class="item-thumb" data-bind="attr: { src: image_url }">
+        <!-- /ko -->
+        <!-- ko ifnot: image_url -->
+        <div class="item-thumb-placeholder">📦</div>
+        <!-- /ko -->
+        <div class="location-item-info">
+          <strong data-bind="text: displayname"></strong>
+          <span data-bind="text: upc"></span>
+        </div>
+        <div class="location-item-qty">
+          <span data-bind="text: qty_on_hand"></span>
+          <small>in stock</small>
+        </div>
+      </div>
+    </div>
+    <!-- ko if: locationItems().length === 0 -->
+    <p class="empty-list">Nothing stored here yet.</p>
+    <!-- /ko -->
+  </div>
+  <!-- /ko -->
+</div>
+
+<!-- Knockout.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.5.1/knockout-min.js"></script>
+<script src="/app.js"></script>
 </body>
 </html>

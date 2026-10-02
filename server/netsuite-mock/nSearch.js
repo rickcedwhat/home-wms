@@ -74,6 +74,8 @@ class MockSearch {
           i.upc,
           i.item_type,
           i.base_price,
+          i.image_url,
+          i.notes,
           COALESCE(SUM(b.qty_on_hand), 0) as total_qty
         FROM items i
         LEFT JOIN inventory_balances b ON i.itemid = b.item_id
@@ -115,7 +117,8 @@ class MockSearch {
             ib.bin_id,
             ib.qty_on_hand,
             b.aisle,
-            b.zone
+            b.zone,
+            b.display_label
           FROM inventory_balances ib
           JOIN bins b ON ib.bin_id = b.binnumber
           WHERE ib.item_id = ? AND ib.qty_on_hand > 0
@@ -129,7 +132,7 @@ class MockSearch {
       });
     } else if (this.type === Type.BIN) {
       rows = db.prepare(`
-        SELECT binnumber, aisle, zone, location_id
+        SELECT binnumber, aisle, zone, location_id, display_label, barcode
         FROM bins
         ORDER BY binnumber ASC
       `).all();

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>RF-SMART — Print Kitchen Location Labels</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      color: #000;
+      padding: 1.5rem;
+    }
+    h1 {
+      font-size: 1.2rem;
+      margin-bottom: 0.5rem;
+    }
+    .subtitle {
+      font-size: 0.85rem;
+      color: #555;
+      margin-bottom: 1.5rem;
+    }
+    .label-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+    .label {
+      border: 1.5px solid #ccc;
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.45rem;
+      break-inside: avoid;
+    }
+    .label-emoji { font-size: 2rem; }
+    .label-name { font-size: 0.88rem; font-weight: 700; text-align: center; }
+    .label-code { font-size: 0.65rem; color: #666; font-family: monospace; }
+    .barcode-wrap { width: 100%; }
+    svg.barcode { width: 100%; height: 45px; }
+
+    @media print {
+      body { padding: 0.5cm; }
+      h1, .subtitle, .print-btn { display: none; }
+      .label-grid { gap: 0.5cm; }
+    }
+
+    .print-btn {
+      margin-bottom: 1.5rem;
+      background: #f59e0b;
+      color: #000;
+      border: none;
+      font-weight: 700;
+      font-size: 0.9rem;
+      padding: 0.6rem 1.4rem;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>🖨 Kitchen Location Labels</h1>
+  <p class="subtitle">Print these, cut them out, and stick them on your kitchen locations. Scan the barcode with the app.</p>
+  <button class="print-btn" onclick="window.print()">Print Labels</button>
+  <div class="label-grid" id="labelGrid">Loading…</div>
+
+  <!-- JsBarcode for Code128 barcodes -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.5/JsBarcode.all.min.js"></script>
+  <script>
+    async function loadBins() {
+      const res = await fetch('/api/scanner/bins');
+      const data = await res.json();
+      if (data.status !== 'SUCCESS') return;
+
+      const grid = document.getElementById('labelGrid');
+      grid.innerHTML = '';
+
+      for (const bin of data.data) {
+        const barcode = bin.barcode || bin.binnumber;
+        const label = bin.display_label || bin.binnumber;
+        const emoji = label.split(' ')[0] || '📦';
+        const namePart = label.includes(' ') ? label.split(' ').slice(1).join(' ') : label;
+
+        const div = document.createElement('div');
+        div.className = 'label';
+        div.innerHTML = `
+          <div class="label-emoji">${emoji}</div>
+          <div class="label-name">${namePart}</div>
+          <div class="barcode-wrap">
+            <svg class="barcode" id="bc-${bin.binnumber}"></svg>
+          </div>
+          <div class="label-code">${barcode}</div>
+        `;
+        grid.appendChild(div);
+
+        // Render barcode after DOM insertion
+        setTimeout(() => {
+          JsBarcode(`#bc-${bin.binnumber}`, barcode, {
+            format: 'CODE128',
+            displayValue: false,
+            margin: 4,
+            lineColor: '#000',
+            background: 'transparent'
+          });
+        }, 0);
+      }
+    }
+
+    loadBins();
+  </script>
+</body>
+</html>
