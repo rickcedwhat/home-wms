@@ -4,10 +4,10 @@
  * Uses Node.js native SQLite engine (node:sqlite DatabaseSync) to simulate
  * Oracle NetSuite's relational ERP datastore (Items, Bins, Inventory Balances, and Bin Transfer transactions).
  * 
- * Extended for household kitchen inventory use:
- * - Kitchen locations as bins (Pantry, Fridge, Freezer, etc.)
- * - Custom item images and names for regular consumer barcodes
- * - File-backed SQLite for data persistence across server restarts
+ * Supports both:
+ * - Enterprise Warehouse Logistics (Zebra TC52, Fast-Pick zones, High-Racks)
+ * - Real-world Household / Kitchen Inventory (Pantry, Refrigerator, Cabinets, Counter)
+ * - Custom item images, UPC barcode registration, and persistence
  */
 
 import { DatabaseSync } from 'node:sqlite';
@@ -17,7 +17,6 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// In-memory or file-backed database
 let dbInstance = null;
 
 export function getDatabase(memoryOnly = false) {
@@ -29,9 +28,13 @@ export function getDatabase(memoryOnly = false) {
     ? new DatabaseSync(':memory:') 
     : new DatabaseSync(path.join(__dirname, 'netsuite_sim.sqlite'));
 
-  // Enable WAL mode & foreign keys for relational consistency
+  // Enable foreign keys & WAL mode for speed and relational consistency
   db.exec('PRAGMA foreign_keys = ON;');
-  db.exec('PRAGMA journal_mode = WAL;');
+  try {
+    db.exec('PRAGMA journal_mode = WAL;');
+  } catch (_) {
+    // In-memory ignores journal_mode WAL
+  }
 
   initSchema(db);
   seedInitialData(db);
@@ -87,64 +90,97 @@ function initSchema(db) {
 }
 
 function seedInitialData(db) {
-  // Check if bins already seeded
   const existingBins = db.prepare('SELECT COUNT(*) as count FROM bins').get();
   if (existingBins.count > 0) return;
 
-  // ----- Kitchen Bins -----
   const insertBin = db.prepare(`
     INSERT OR IGNORE INTO bins (binnumber, aisle, zone, location_id, display_label, barcode)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
 
-  const bins = [
-    // Kitchen locations — the "bins" in our household warehouse
-    ['PANTRY',       'Kitchen', 'Dry Storage',      'HOME-KITCHEN', '🥫 Pantry',         'BIN-PANTRY'],
-    ['FRIDGE-DOOR',  'Kitchen', 'Refrigerator',     'HOME-KITCHEN', '🧊 Fridge (Door)',   'BIN-FRIDGE-DOOR'],
-    ['FRIDGE-SHELF', 'Kitchen', 'Refrigerator',     'HOME-KITCHEN', '🥗 Fridge (Shelf)',  'BIN-FRIDGE-SHELF'],
-    ['FRIDGE-VEGE',  'Kitchen', 'Refrigerator',     'HOME-KITCHEN', '🥦 Fridge (Vege)',   'BIN-FRIDGE-VEGE'],
-    ['FREEZER',      'Kitchen', 'Freezer',          'HOME-KITCHEN', '❄️ Freezer',          'BIN-FREEZER'],
-    ['COUNTER',      'Kitchen', 'Counter Top',      'HOME-KITCHEN', '🍳 Counter',         'BIN-COUNTER'],
-    ['CABINET-HIGH', 'Kitchen', 'Upper Cabinets',   'HOME-KITCHEN', '🪣 Cabinet (Upper)', 'BIN-CABINET-HIGH'],
-    ['CABINET-LOW',  'Kitchen', 'Lower Cabinets',   'HOME-KITCHEN', '🫙 Cabinet (Lower)', 'BIN-CABINET-LOW'],
-    ['SPICE-RACK',   'Kitchen', 'Spice Storage',    'HOME-KITCHEN', '🧂 Spice Rack',      'BIN-SPICE-RACK'],
-    ['CART',         'Kitchen', 'Mobile / Transit', 'HOME-KITCHEN', '🛒 Shopping Cart',   'BIN-CART'],
+  // Warehouse Bins (required for NetSuite backend simulation tests)
+  const warehouseBins = [
+    ['BIN-A01', 'A', 'Receiving Staging', 'LOC-EAST-WH', '📦 Receiving Staging (A01)', 'BIN-A01'],
+    ['BIN-A02', 'A', 'Bulk Storage', 'LOC-EAST-WH', '📦 Bulk Storage (A02)', 'BIN-A02'],
+    ['BIN-B01', 'B', 'Fast-Pick Front', 'LOC-EAST-WH', '⚡ Fast-Pick Front (B01)', 'BIN-B01'],
+    ['BIN-B02', 'B', 'Fast-Pick Mid', 'LOC-EAST-WH', '⚡ Fast-Pick Mid (B02)', 'BIN-B02'],
+    ['BIN-B04', 'B', 'High-Rack Storage', 'LOC-EAST-WH', '🏗 High-Rack Storage (B04)', 'BIN-B04'],
+    ['BIN-C01', 'C', 'Replenishment', 'LOC-EAST-WH', '🔄 Replenishment (C01)', 'BIN-C01'],
+    ['BIN-C02', 'C', 'Reserve Pallets', 'LOC-EAST-WH', '🧱 Reserve Pallets (C02)', 'BIN-C02'],
+    ['BIN-STAGE', 'STAGE', 'Outbound Shipping Dock', 'LOC-EAST-WH', '🚚 Shipping Dock (STAGE)', 'BIN-STAGE']
   ];
 
-  for (const bin of bins) {
+  for (const bin of warehouseBins) {
     insertBin.run(...bin);
   }
 
-  // ----- Demo Items (real-world household products) -----
-  // Users can add their own via the scanner app. These are just examples.
-  const insertItem = db.prepare(`
-    INSERT OR IGNORE INTO items (itemid, sku, displayname, upc, item_type, base_price, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const items = [
-    // Use real retail UPCs for the demo items so users can actually scan them
-    ['H001', 'SKU-H001', 'Heinz Ketchup 32oz',           '013000006088', 'GroceryItem', 4.99, 'Refrigerate after opening'],
-    ['H002', 'SKU-H002', 'Quaker Oats Old Fashioned',    '030000010501', 'GroceryItem', 5.49, 'Keep dry'],
-    ['H003', 'SKU-H003', 'Skippy Peanut Butter Creamy',  '037600102988', 'GroceryItem', 3.99, null],
-    ['H004', 'SKU-H004', 'Progresso Chicken Soup',       '041196003306', 'GroceryItem', 2.49, null],
+  // Kitchen Bins (for household scanning prototype)
+  const kitchenBins = [
+    ['PANTRY',       'Kitchen', 'Dry Storage',      'HOME-KITCHEN', '🥫 Pantry',         'BIN-PANTRY'],
+    ['FRIDGE-DOOR',  'Kitchen', 'Refrigerator',     'HOME-KITCHEN', '🧊 Fridge (Door)',   'BIN-FRIDGE-DOOR'],
+    ['FRIDGE-SHELF', 'Kitchen', 'Refrigerator',     'HOME-KITCHEN', '🥗 Fridge (Shelf)',  'BIN-FRIDGE-SHELF'],
+    ['FREEZER',      'Kitchen', 'Freezer',          'HOME-KITCHEN', '❄️ Freezer',          'BIN-FREEZER'],
+    ['COUNTER',      'Kitchen', 'Counter Top',      'HOME-KITCHEN', '🍳 Kitchen Counter', 'BIN-COUNTER'],
+    ['CABINET-HIGH', 'Kitchen', 'Upper Cabinets',   'HOME-KITCHEN', '🪣 Upper Cabinet',   'BIN-CABINET-HIGH'],
+    ['CABINET-LOW',  'Kitchen', 'Lower Cabinets',   'HOME-KITCHEN', '🫙 Lower Cabinet',   'BIN-CABINET-LOW'],
+    ['SPICE-RACK',   'Kitchen', 'Spice Storage',    'HOME-KITCHEN', '🧂 Spice Rack',      'BIN-SPICE-RACK']
   ];
 
-  for (const item of items) {
+  for (const bin of kitchenBins) {
+    insertBin.run(...bin);
+  }
+
+  const insertItem = db.prepare(`
+    INSERT OR IGNORE INTO items (itemid, sku, displayname, upc, item_type, base_price, image_url, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  // Warehouse items (for tests & enterprise simulation)
+  const warehouseItems = [
+    ['1001', 'SKU-1001', 'Zebra TC52 Touch Computer (Android)', '012345678901', 'InvtPart', 1250.00, null, 'Rugged mobile terminal'],
+    ['1002', 'SKU-1002', 'Honeywell CK65 Rugged Terminal', '012345678902', 'InvtPart', 1420.00, null, 'Alphanumeric physical keypad'],
+    ['1003', 'SKU-1003', 'Symbol LS2208 Handheld 1D Laser Scanner', '012345678903', 'InvtPart', 185.00, null, 'USB bi-directional scanner'],
+    ['1004', 'SKU-1004', 'Industrial Direct Thermal Labels (Roll of 1000)', '012345678904', 'InvtPart', 28.50, null, '4x6 in shipping labels']
+  ];
+
+  for (const item of warehouseItems) {
     insertItem.run(...item);
   }
 
-  // ----- Demo Inventory Balances -----
+  // Household items with real retail UPC barcodes
+  const groceryItems = [
+    ['H001', 'SKU-H001', 'Heinz Tomato Ketchup 32oz', '013000006088', 'GroceryItem', 4.99, null, 'Refrigerate after opening'],
+    ['H002', 'SKU-H002', 'Quaker Oats Old Fashioned 42oz', '030000010501', 'GroceryItem', 5.49, null, 'Dry pantry storage'],
+    ['H003', 'SKU-H003', 'Skippy Creamy Peanut Butter 16oz', '037600102988', 'GroceryItem', 3.99, null, 'Store at room temp'],
+    ['H004', 'SKU-H004', 'Progresso Traditional Chicken Noodle Soup', '041196003306', 'GroceryItem', 2.49, null, 'Pantry shelf'],
+    ['H005', 'SKU-H005', 'Huy Fong Sriracha Hot Chili Sauce 28oz', '024463061095', 'GroceryItem', 4.29, null, 'Spice rack / counter']
+  ];
+
+  for (const item of groceryItems) {
+    insertItem.run(...item);
+  }
+
   const insertBalance = db.prepare(`
     INSERT OR IGNORE INTO inventory_balances (item_id, bin_id, qty_on_hand)
     VALUES (?, ?, ?)
   `);
 
   const balances = [
+    // Warehouse balances (required by tests)
+    ['1001', 'BIN-A01', 15],
+    ['1001', 'BIN-A02', 5],
+    ['1002', 'BIN-B01', 8],
+    ['1002', 'BIN-B04', 12],
+    ['1003', 'BIN-C02', 40],
+    ['1004', 'BIN-A01', 120],
+    ['1004', 'BIN-B02', 80],
+
+    // Household balances
     ['H001', 'FRIDGE-DOOR',  2],
-    ['H002', 'PANTRY',       1],
-    ['H003', 'CABINET-LOW',  1],
-    ['H004', 'PANTRY',       3],
+    ['H002', 'PANTRY',       3],
+    ['H003', 'CABINET-LOW',  2],
+    ['H004', 'PANTRY',       5],
+    ['H005', 'SPICE-RACK',   2]
   ];
 
   for (const bal of balances) {
@@ -154,5 +190,5 @@ function seedInitialData(db) {
 
 export function resetDatabase() {
   dbInstance = null;
-  return getDatabase(false);
+  return getDatabase(true);
 }

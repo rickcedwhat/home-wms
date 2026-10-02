@@ -1,493 +1,866 @@
 /**
- * RF-SMART Kitchen Inventory - Knockout.js ViewModel
- *
- * Features:
- * - Camera barcode scanning via BarcodeDetector API (iOS 17+, Chrome)
- * - Manual barcode entry fallback
- * - Add new items when barcode not found (name + photo + location)
- * - Transfer items between kitchen locations
- * - Full inventory + location browsing
- * - Transfer history
+ * RF-SMART Prototype - Knockout.js ViewModel & Mobile Simulation Engine
+ * 
+ * Demonstrates:
+ * - MVVM Pattern with Knockout.js observables and computeds
+ * - Rugged Handheld Scanner UX (Zebra TC52) with camera and photo barcode capture
+ * - Real-world Physical Storage Racks (Kitchen Locations & Warehouse Racks)
+ * - Household item registration flow with photos & custom barcodes
+ * - Real-time NetSuite Middleware activity feed & OAuth 1.0a TBA telemetry
+ * - Instant phone pairing via LAN QR code
  */
 
-(function () {
-  'use strict';
-
-  // ─── Audio: scan chimes ─────────────────────────────────────────
-  const AudioCtx = window.AudioContext || window.webkitAudioContext;
-  let audioCtx = null;
-
-  function getAudioCtx() {
-    if (!audioCtx) audioCtx = new AudioCtx();
-    return audioCtx;
+// Web Audio API Synthesizer for Industrial Warehouse Scanners
+class ScannerAudio {
+  constructor() {
+    this.ctx = null;
   }
 
-  function playChime(type = 'success') {
+  init() {
+    if (!this.ctx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) this.ctx = new AudioCtx();
+    }
+  }
+
+  playSuccess() {
     try {
-      const ctx = getAudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
+      this.init();
+      if (!this.ctx) return;
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
       osc.type = 'sine';
-      const now = ctx.currentTime;
-      if (type === 'success') {
-        osc.frequency.setValueAtTime(880, now);
-        osc.frequency.setValueAtTime(1100, now + 0.08);
-        gain.gain.setValueAtTime(0.15, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-        osc.start(now);
-        osc.stop(now + 0.25);
-      } else {
-        osc.frequency.setValueAtTime(400, now);
-        gain.gain.setValueAtTime(0.2, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-        osc.start(now);
-        osc.stop(now + 0.35);
-      }
+      // Classic industrial dual-frequency chirp: 1800Hz jumping to 2400Hz
+      osc.frequency.setValueAtTime(1800, this.ctx.currentTime);
+      osc.frequency.setValueAtTime(2400, this.ctx.currentTime + 0.04);
+
+      gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.14);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start();
+      osc.stop(this.ctx.currentTime + 0.14);
     } catch (_) {}
   }
 
-  // ─── Utilities ───────────────────────────────────────────────────
-  function debounce(fn, ms) {
-    let t;
-    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+  playError() {
+    try {
+      this.init();
+      if (!this.ctx) return;
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sawtooth';
+      // Harsh industrial error buzz: 220Hz dropping to 180Hz
+      osc.frequency.setValueAtTime(220, this.ctx.currentTime);
+      osc.frequency.setValueAtTime(180, this.ctx.currentTime + 0.15);
+
+      gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.32);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start();
+      osc.stop(this.ctx.currentTime + 0.32);
+    } catch (_) {}
   }
+}
 
-  // ─── ViewModel ───────────────────────────────────────────────────
-  function AppViewModel() {
-    const self = this;
+const scannerAudio = new ScannerAudio();
 
-    // ── Navigation ──────────────────────────────────────────────────
-    self.currentPage = ko.observable('scan');
-    self.currentPageTitle = ko.computed(() => {
-      const m = { scan: 'Kitchen Scanner', inventory: 'Inventory', locations: 'Locations', history: 'History' };
-      return m[self.currentPage()] || 'RF-SMART Kitchen';
+function ScannerViewModel() {
+  const self = this;
+
+  // --- Core State Observables ---
+  self.scannedBarcode = ko.observable('');
+  self.selectedItem = ko.observable(null);
+  self.fromBin = ko.observable('');
+  self.toBin = ko.observable('');
+  self.transferQty = ko.observable(1);
+
+  self.isProcessing = ko.observable(false);
+  self.isTransferring = ko.observable(false);
+  self.soundEnabled = ko.observable(true);
+
+  // Visual scan flash indicators
+  self.flashSuccess = ko.observable(false);
+  self.flashError = ko.observable(false);
+
+  // Status feedback message
+  self.feedbackMessage = ko.observable('');
+  self.feedbackType = ko.observable('info'); // 'info' | 'success' | 'error'
+
+  // Unknown barcode registration prompt
+  self.unknownBarcodeScanned = ko.observable(null);
+
+  // Camera Scanning State
+  self.cameraScanning = ko.observable(false);
+  let zxingReader = null;
+  let cameraStream = null;
+
+  // Navigation tab for right column
+  self.activeViewTab = ko.observable('items'); // 'items' | 'activity' | 'ledger'
+  
+  // Mobile segmented view switcher ('scanner' | 'racks' | 'activity')
+  self.mobileActiveTab = ko.observable('scanner');
+
+  // Filter for storage bins: 'all' | 'kitchen' | 'warehouse'
+  self.binFilter = ko.observable('all');
+
+  // Collections (Observable Arrays)
+  self.inventoryList = ko.observableArray([]);
+  self.transferHistory = ko.observableArray([]);
+  self.telemetryLogs = ko.observableArray([]);
+  self.allWarehouseBinsData = ko.observableArray([]);
+
+  // Network info for phone access
+  self.lanIP = ko.observable('localhost');
+  self.port = ko.observable(7370);
+  self.mobileUrl = ko.computed(function () {
+    return 'http://' + self.lanIP() + ':' + self.port();
+  });
+
+  // Phone QR Code Modal
+  self.showPhoneModal = ko.observable(false);
+  let qrCodeInstance = null;
+
+  // Register Item Modal
+  self.showRegisterModal = ko.observable(false);
+  self.registerForm = {
+    upc: ko.observable(''),
+    displayname: ko.observable(''),
+    notes: ko.observable(''),
+    binId: ko.observable(''),
+    quantity: ko.observable(1),
+    previewUrl: ko.observable(''),
+    fileObj: null
+  };
+
+  self.isRegisterFormValid = ko.computed(function () {
+    const f = self.registerForm;
+    return f.upc().trim().length > 0 && 
+           f.displayname().trim().length > 0 && 
+           f.binId().length > 0 && 
+           Number(f.quantity()) > 0;
+  });
+
+  // Track Open/Close state per bin
+  self.binOpenMap = {};
+  self.getBinOpenState = function(binId) {
+    if (!self.binOpenMap[binId]) {
+      self.binOpenMap[binId] = ko.observable(true);
+    }
+    return self.binOpenMap[binId];
+  };
+
+  self.toggleBin = function(bin) {
+    const obs = self.getBinOpenState(bin.binId);
+    obs(!obs());
+  };
+
+  self.expandAllBins = function() {
+    self.allWarehouseBinsData().forEach(function (b) {
+      self.getBinOpenState(b.binnumber)(true);
     });
+  };
 
-    self.goToScan = () => { self.currentPage('scan'); self.loadIfNeeded(); };
-    self.goToInventory = () => { self.currentPage('inventory'); self.loadInventory(); };
-    self.goToLocations = () => { self.currentPage('locations'); };
-    self.goToHistory = () => { self.currentPage('history'); self.loadHistory(); };
-
-    // ── Data ─────────────────────────────────────────────────────────
-    self.kitchenBins = ko.observableArray([]);
-    self.inventoryItems = ko.observableArray([]);
-    self.inventoryLoading = ko.observable(false);
-    self.inventorySearch = ko.observable('');
-    self.transferHistory = ko.observableArray([]);
-
-    self.filteredInventoryItems = ko.computed(() => {
-      const q = self.inventorySearch().toLowerCase().trim();
-      if (!q) return self.inventoryItems();
-      return self.inventoryItems().filter(i =>
-        (i.displayname || '').toLowerCase().includes(q) ||
-        (i.upc || '').includes(q)
-      );
+  self.collapseAllBins = function() {
+    self.allWarehouseBinsData().forEach(function (b) {
+      self.getBinOpenState(b.binnumber)(false);
     });
+  };
 
-    // ── Scan State ───────────────────────────────────────────────────
-    self.manualBarcode = ko.observable('');
-    self.scanStatus = ko.observable('');
-    self.scanStatusClass = ko.computed(() => {
-      const s = self.scanStatus();
-      if (!s) return 'scan-toast';
-      if (s.startsWith('✓') || s.startsWith('✅')) return 'scan-toast toast-success';
-      if (s.startsWith('⚠') || s.startsWith('❌') || s.startsWith('✕')) return 'scan-toast toast-error';
-      return 'scan-toast toast-info';
+  // Sound Toggle
+  self.toggleSound = function() {
+    self.soundEnabled(!self.soundEnabled());
+  };
+
+  // Helper for Category & Icon display
+  self.getItemIcon = function(sku) {
+    if (!sku) return '📦';
+    const s = sku.toUpperCase();
+    if (s.includes('H001') || s.includes('KETCHUP')) return '🥫';
+    if (s.includes('H002') || s.includes('OAT')) return '🥣';
+    if (s.includes('H003') || s.includes('PEANUT')) return '🥜';
+    if (s.includes('H004') || s.includes('SOUP')) return '🍲';
+    if (s.includes('H005') || s.includes('SRIRACHA') || s.includes('CHILI')) return '🌶';
+    if (s.includes('1001') || s.includes('TC52')) return '📱';
+    if (s.includes('1002') || s.includes('CK65')) return '📟';
+    if (s.includes('1003') || s.includes('LS2208')) return '🔫';
+    if (s.includes('1004') || s.includes('LABEL')) return '🏷';
+    return '📦';
+  };
+
+  self.getBinEmoji = function(binId, displayLabel) {
+    if (displayLabel && displayLabel.includes(' ')) {
+      const first = displayLabel.trim().split(' ')[0];
+      if (first.length <= 4) return first;
+    }
+    if (binId.includes('PANTRY')) return '🥫';
+    if (binId.includes('FRIDGE-DOOR')) return '🧊';
+    if (binId.includes('FRIDGE')) return '🥗';
+    if (binId.includes('FREEZER')) return '❄️';
+    if (binId.includes('COUNTER')) return '🍳';
+    if (binId.includes('CABINET-HIGH')) return '🪣';
+    if (binId.includes('CABINET-LOW')) return '🫙';
+    if (binId.includes('SPICE')) return '🧂';
+    if (binId.includes('STAGE')) return '🚚';
+    if (binId.includes('A01') || binId.includes('A02')) return '📦';
+    if (binId.includes('B01') || binId.includes('B02')) return '⚡';
+    if (binId.includes('B04')) return '🏗';
+    if (binId.includes('C01')) return '🔄';
+    if (binId.includes('C02')) return '🧱';
+    return '📦';
+  };
+
+  // --- Computed: Total Unique Items Count ---
+  self.totalItemsCount = ko.computed(function () {
+    const set = new Set();
+    self.inventoryList().forEach(function (i) {
+      if (i.qty_on_hand > 0) set.add(i.sku);
     });
-    self.scannedItem = ko.observable(null);
-    self.cameraActive = ko.observable(false);
+    return set.size;
+  });
 
-    // ── Camera / BarcodeDetector ─────────────────────────────────────
-    let scanStream = null;
-    let barcodeDetector = null;
-    let scanLoopId = null;
-    let lastScannedCode = null;
-    let lastScanTime = 0;
+  // --- Computed: Storage Racks Hierarchy ---
+  self.warehouseRack = ko.computed(function() {
+    const bins = self.allWarehouseBinsData();
+    const inventory = self.inventoryList();
+    const activeItem = self.selectedItem();
+    const activeFromBin = self.fromBin();
+    const activeToBin = self.toBin();
 
-    async function initBarcodeDetector() {
-      if (barcodeDetector) return true;
-      if ('BarcodeDetector' in window) {
-        try {
-          const formats = await BarcodeDetector.getSupportedFormats();
-          barcodeDetector = new BarcodeDetector({ formats });
-          return true;
-        } catch (e) {
-          console.warn('BarcodeDetector init failed:', e);
-        }
-      }
+    return bins.map(function(bin) {
+      const binId = bin.binnumber;
+      const itemsInBin = inventory.filter(function (i) {
+        return i.bin_id === binId && i.qty_on_hand > 0;
+      });
+      const totalUnits = itemsInBin.reduce(function (sum, item) {
+        return sum + item.qty_on_hand;
+      }, 0);
+
+      const isKitchen = bin.aisle === 'Kitchen' || bin.location_id === 'HOME-KITCHEN';
+
+      return {
+        binId: binId,
+        displayLabel: bin.display_label || binId,
+        aisle: bin.aisle,
+        zone: bin.zone,
+        locationId: bin.location_id,
+        isKitchen: isKitchen,
+        emoji: self.getBinEmoji(binId, bin.display_label),
+        totalUnits: totalUnits,
+        itemCount: itemsInBin.length,
+        items: itemsInBin,
+        isOpen: self.getBinOpenState(binId),
+        isSource: ko.computed(function() { return activeFromBin === binId; }),
+        isTarget: ko.computed(function() { return activeToBin === binId; })
+      };
+    });
+  });
+
+  // Filtered Racks (All / Kitchen / Warehouse)
+  self.filteredRack = ko.computed(function () {
+    const f = self.binFilter();
+    const rack = self.warehouseRack();
+    if (f === 'kitchen') return rack.filter(function (b) { return b.isKitchen; });
+    if (f === 'warehouse') return rack.filter(function (b) { return !b.isKitchen; });
+    return rack;
+  });
+
+  // --- Computed: Transfer Dropdown Options ---
+  self.sourceBinOptions = ko.computed(function() {
+    const item = self.selectedItem();
+    if (!item || !item.bins) return [];
+    return item.bins.map(function(b) { return b.bin_id; });
+  });
+
+  self.destBinOptions = ko.computed(function() {
+    const currentFrom = self.fromBin();
+    return self.allWarehouseBinsData()
+      .map(function(b) { return b.binnumber; })
+      .filter(function(b) { return b !== currentFrom; });
+  });
+
+  self.availableInFromBin = ko.computed(function() {
+    const item = self.selectedItem();
+    const from = self.fromBin();
+    if (!item || !from || !item.bins) return 0;
+    const binRow = item.bins.find(function(b) { return b.bin_id === from; });
+    return binRow ? binRow.qty_on_hand : 0;
+  });
+
+  self.canCommitTransfer = ko.computed(function() {
+    const item = self.selectedItem();
+    const from = self.fromBin();
+    const to = self.toBin();
+    const qty = Number(self.transferQty());
+    const available = self.availableInFromBin();
+
+    return (
+      item !== null &&
+      from &&
+      to &&
+      from !== to &&
+      !isNaN(qty) &&
+      qty > 0 &&
+      qty <= available &&
+      !self.isTransferring()
+    );
+  });
+
+  // --- Telemetry Logging ---
+  self.logTelemetry = function(entry) {
+    self.telemetryLogs.unshift({
+      badge: entry.badge,
+      badgeClass: entry.badgeClass,
+      title: entry.title,
+      message: entry.message,
+      latency: entry.latency || 0,
+      timestamp: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      type: entry.type || 'info'
+    });
+    if (self.telemetryLogs().length > 40) {
+      self.telemetryLogs.pop();
+    }
+  };
+
+  self.clearTelemetry = function() {
+    self.telemetryLogs.removeAll();
+  };
+
+  // --- Scan Barcode Execution ---
+  self.scanDirect = function(barcode) {
+    self.scannedBarcode(barcode);
+    self.executeBarcodeLookup(barcode);
+  };
+
+  self.submitManualBarcode = function () {
+    const code = self.scannedBarcode().trim();
+    if (code) self.executeBarcodeLookup(code);
+  };
+
+  self.handleBarcodeKeypress = function(data, event) {
+    if (event.key === 'Enter') {
+      const code = self.scannedBarcode().trim();
+      if (code) self.executeBarcodeLookup(code);
       return false;
     }
+    return true;
+  };
 
-    async function startScanLoop() {
-      const video = document.getElementById('scanVideo');
-      const canvas = document.getElementById('scanCanvas');
-      if (!video || !canvas || !barcodeDetector) return;
+  self.executeBarcodeLookup = async function(rawBarcode) {
+    if (!rawBarcode || self.isProcessing()) return;
 
-      const ctx = canvas.getContext('2d');
-      async function tick() {
-        if (!self.cameraActive()) return;
-        if (video.readyState === video.HAVE_ENOUGH_DATA) {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          ctx.drawImage(video, 0, 0);
-          try {
-            const barcodes = await barcodeDetector.detect(canvas);
-            if (barcodes.length > 0) {
-              const code = barcodes[0].rawValue;
-              const now = Date.now();
-              // Debounce: don't re-scan same code within 3 seconds
-              if (code !== lastScannedCode || now - lastScanTime > 3000) {
-                lastScannedCode = code;
-                lastScanTime = now;
-                self.processBarcode(code);
-              }
-            }
-          } catch (_) {}
+    self.isProcessing(true);
+    self.feedbackMessage('');
+    self.unknownBarcodeScanned(null);
+    const start = Date.now();
+
+    try {
+      const res = await fetch('/api/scanner/lookup?barcode=' + encodeURIComponent(rawBarcode));
+      const data = await res.json();
+      const latency = Date.now() - start;
+
+      if (data.success && data.data) {
+        if (self.soundEnabled()) scannerAudio.playSuccess();
+        self.flashSuccess(true);
+        setTimeout(function() { self.flashSuccess(false); }, 400);
+
+        self.selectedItem(data.data);
+        self.transferQty(1);
+
+        // Pre-select first available bin with stock
+        if (data.data.bins && data.data.bins.length > 0) {
+          self.fromBin(data.data.bins[0].bin_id);
+          const other = self.allWarehouseBinsData().find(function (b) {
+            return b.binnumber !== data.data.bins[0].bin_id;
+          });
+          if (other) self.toBin(other.binnumber);
+        } else {
+          self.fromBin('');
+          self.toBin('');
         }
-        scanLoopId = requestAnimationFrame(tick);
+
+        self.feedbackType('success');
+        self.feedbackMessage('✓ Found: ' + (data.data.displayName || data.data.displayname));
+
+        self.logTelemetry({
+          badge: data.source === 'CACHE' ? 'CACHE-HIT' : 'NETSUITE',
+          badgeClass: data.source === 'CACHE' ? 'badge-cache' : 'badge-erp',
+          title: 'Lookup: ' + (data.data.displayName || data.data.sku),
+          message: 'Parsed: ' + data.parsedBarcode.identifier + ' (' + data.parsedBarcode.symbology + ') via ' + data.source,
+          latency: latency
+        });
+
+      } else {
+        if (self.soundEnabled()) scannerAudio.playError();
+        self.flashError(true);
+        setTimeout(function() { self.flashError(false); }, 500);
+
+        self.feedbackType('error');
+        self.feedbackMessage('⚠ ' + (data.error || 'Barcode not found'));
+        self.unknownBarcodeScanned(rawBarcode);
+
+        self.logTelemetry({
+          badge: 'NOT-FOUND',
+          badgeClass: 'badge-transfer',
+          title: 'Scan Miss: ' + rawBarcode,
+          message: data.error || 'Barcode not registered in ERP',
+          latency: latency,
+          type: 'error'
+        });
       }
-      scanLoopId = requestAnimationFrame(tick);
+    } catch (err) {
+      if (self.soundEnabled()) scannerAudio.playError();
+      self.feedbackType('error');
+      self.feedbackMessage('✕ Connection error: ' + err.message);
+    } finally {
+      self.isProcessing(false);
+      // Auto focus back on barcode input if on desktop
+      const input = document.getElementById('barcodeInput');
+      if (input && window.innerWidth > 768) input.focus();
+    }
+  };
+
+  // --- Select Item Directly from Physical Storage Tile ---
+  self.selectItemFromBin = function(item, binId) {
+    self.selectedItem({
+      itemId: item.item_id,
+      itemid: item.item_id,
+      sku: item.sku,
+      displayName: item.displayname,
+      displayname: item.displayname,
+      upc: item.upc,
+      image_url: item.image_url,
+      totalQty: item.qty_on_hand,
+      bins: [{ bin_id: binId, qty_on_hand: item.qty_on_hand }]
+    });
+
+    self.fromBin(binId);
+    self.transferQty(1);
+
+    // Pick a sensible default destination
+    const candidateDest = self.allWarehouseBinsData().find(function (b) {
+      return b.binnumber !== binId;
+    });
+    if (candidateDest) self.toBin(candidateDest.binnumber);
+
+    if (self.soundEnabled()) scannerAudio.playSuccess();
+    self.flashSuccess(true);
+    setTimeout(function() { self.flashSuccess(false); }, 350);
+
+    self.feedbackType('info');
+    self.feedbackMessage('Scanned package: ' + item.displayname + ' from ' + binId);
+
+    // If on phone, switch to scanner tab automatically
+    if (self.mobileActiveTab() !== 'scanner') {
+      self.mobileActiveTab('scanner');
     }
 
-    self.toggleCamera = async () => {
-      if (self.cameraActive()) {
-        // Stop camera
-        self.cameraActive(false);
-        if (scanLoopId) { cancelAnimationFrame(scanLoopId); scanLoopId = null; }
-        if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
-        return;
-      }
+    // Refresh full item details via API in background
+    self.executeBarcodeLookup(item.upc || item.sku);
+  };
 
-      // Start camera
-      const ok = await initBarcodeDetector();
-      if (!ok) {
-        self.setScanStatus('⚠ BarcodeDetector not supported on this browser. Use manual entry.', 'error');
-        return;
-      }
+  self.selectSourceBin = function(binId) {
+    self.fromBin(binId);
+    if (self.toBin() === binId) {
+      const candidate = self.allWarehouseBinsData().find(function(b) { return b.binnumber !== binId; });
+      if (candidate) self.toBin(candidate.binnumber);
+    }
+  };
 
-      try {
-        scanStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-        });
-        const video = document.getElementById('scanVideo');
-        if (video) { video.srcObject = scanStream; }
-        self.cameraActive(true);
-        // Wait for video to be ready then start scanning
-        setTimeout(startScanLoop, 500);
-      } catch (err) {
-        self.setScanStatus('⚠ Camera access denied. Please allow camera permissions.', 'error');
-      }
+  self.setDestinationBin = function(binId) {
+    self.toBin(binId);
+    self.feedbackType('info');
+    self.feedbackMessage('Target location set to ' + binId);
+  };
+
+  self.incrementQty = function() {
+    const cur = Number(self.transferQty()) || 0;
+    const max = self.availableInFromBin();
+    if (cur < max) self.transferQty(cur + 1);
+  };
+
+  self.decrementQty = function() {
+    const cur = Number(self.transferQty()) || 1;
+    if (cur > 1) self.transferQty(cur - 1);
+  };
+
+  self.setMaxQty = function() {
+    self.transferQty(self.availableInFromBin());
+  };
+
+  self.resetForm = function() {
+    self.selectedItem(null);
+    self.scannedBarcode('');
+    self.fromBin('');
+    self.toBin('');
+    self.transferQty(1);
+    self.feedbackMessage('');
+    self.unknownBarcodeScanned(null);
+    self.stopCameraScanner();
+    const input = document.getElementById('barcodeInput');
+    if (input) input.focus();
+  };
+
+  // --- Commit Bin Transfer ---
+  self.commitTransfer = async function() {
+    if (!self.canCommitTransfer()) return;
+
+    self.isTransferring(true);
+    self.feedbackMessage('');
+    const start = Date.now();
+
+    const item = self.selectedItem();
+    const payload = {
+      itemId: item.itemId || item.itemid,
+      fromBin: self.fromBin(),
+      toBin: self.toBin(),
+      quantity: Number(self.transferQty())
     };
 
-    // ── Barcode Lookup ───────────────────────────────────────────────
-    self.onBarcodeKeydown = (data, e) => {
-      if (e.key === 'Enter') { self.lookupManual(); return false; }
-      return true;
-    };
-
-    self.lookupManual = () => {
-      const code = self.manualBarcode().trim();
-      if (code) self.processBarcode(code);
-    };
-
-    self.processBarcode = debounce(async (code) => {
-      self.scannedItem(null);
-      self.setScanStatus('🔍 Looking up…', 'info');
-
-      try {
-        const res = await fetch(`/api/scanner/lookup?barcode=${encodeURIComponent(code)}`);
-        const data = await res.json();
-
-        if (data.success) {
-          playChime('success');
-          const item = data.data;
-          item.image_url = item.image_url || null;
-          self.scannedItem(item);
-          self.scanStatus('');
-        } else if (data.errorCode === 'RECORD_NOT_FOUND') {
-          // Not in system yet — let user add it
-          playChime('error');
-          self.scannedItem({ isNew: true, upc: code, displayName: 'Unknown Item', bins: [] });
-          self.setScanStatus(`⚠ Not found — you can add this item`, 'info', 4000);
-        } else {
-          playChime('error');
-          self.setScanStatus(`❌ ${data.error}`, 'error', 3500);
-        }
-      } catch (err) {
-        self.setScanStatus(`❌ Connection error: ${err.message}`, 'error', 3000);
-      }
-    }, 300);
-
-    self.clearScan = () => {
-      self.scannedItem(null);
-      self.scanStatus('');
-      self.manualBarcode('');
-      lastScannedCode = null;
-    };
-
-    // Status helper: shows toast for optional duration then auto-clears
-    self.setScanStatus = (msg, type = 'info', autoClearMs = 0) => {
-      self.scanStatus(msg);
-      if (autoClearMs > 0) setTimeout(() => { if (self.scanStatus() === msg) self.scanStatus(''); }, autoClearMs);
-    };
-
-    // ── Add Item Modal ───────────────────────────────────────────────
-    self.showAddItemModal = ko.observable(false);
-    self.newItem = {
-      upc: ko.observable(''),
-      displayname: ko.observable(''),
-      notes: ko.observable(''),
-      startBin: ko.observable(''),
-      startQty: ko.observable(1),
-      previewUrl: ko.observable(''),
-      fileObj: null,
-      isValid: ko.computed(() => false), // placeholder, set below
-      pickPhoto: (data, e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        self.newItem.fileObj = file;
-        const reader = new FileReader();
-        reader.onload = (ev) => self.newItem.previewUrl(ev.target.result);
-        reader.readAsDataURL(file);
-      }
-    };
-    self.newItem.isValid = ko.computed(() =>
-      self.newItem.upc().trim().length > 0 && self.newItem.displayname().trim().length > 0
-    );
-
-    self.openAddItem = () => {
-      const scanned = self.scannedItem();
-      if (scanned && scanned.isNew) {
-        self.newItem.upc(scanned.upc || '');
-      } else {
-        self.newItem.upc('');
-      }
-      self.newItem.displayname('');
-      self.newItem.notes('');
-      self.newItem.startBin('');
-      self.newItem.startQty(1);
-      self.newItem.previewUrl('');
-      self.newItem.fileObj = null;
-      self.showAddItemModal(true);
-    };
-
-    self.submitNewItem = async () => {
-      if (!self.newItem.isValid()) return;
-
-      try {
-        // 1. Create item record
-        const res = await fetch('/api/scanner/items', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            upc: self.newItem.upc().trim(),
-            displayname: self.newItem.displayname().trim(),
-            notes: self.newItem.notes().trim() || null
-          })
-        });
-        const data = await res.json();
-        if (!data.success) {
-          alert(`Could not create item: ${data.error}`);
-          return;
-        }
-        const itemId = data.item.itemid;
-
-        // 2. Upload photo if selected
-        if (self.newItem.fileObj) {
-          const form = new FormData();
-          form.append('image', self.newItem.fileObj);
-          await fetch(`/api/scanner/items/${itemId}/image`, { method: 'POST', body: form });
-        }
-
-        // 3. Add to starting location if selected
-        if (self.newItem.startBin()) {
-          // Use a direct DB API — create inventory balance via transfer from CART
-          // We'll do it by adding stock directly via a dedicated endpoint (simpler than a transfer)
-          await fetch('/api/scanner/items/' + itemId + '/stock', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              binId: self.newItem.startBin(),
-              qty: Number(self.newItem.startQty()) || 1
-            })
-          });
-        }
-
-        self.closeAllModals();
-        playChime('success');
-        self.setScanStatus(`✅ "${self.newItem.displayname()}" added!`, 'success', 3000);
-        self.scannedItem(null);
-        self.loadInventory();
-      } catch (err) {
-        alert(`Error: ${err.message}`);
-      }
-    };
-
-    // ── Transfer Modal ───────────────────────────────────────────────
-    self.showTransferModal = ko.observable(false);
-    self.transferTarget = ko.observable(null);
-    self.transferForm = {
-      fromBin: ko.observable(''),
-      toBin: ko.observable(''),
-      quantity: ko.observable(1)
-    };
-
-    self.transferableBins = ko.computed(() => {
-      const item = self.transferTarget();
-      if (!item || !item.bins) return [];
-      return (item.bins || []).map(b => ({
-        id: b.bin_id,
-        label: `${b.display_label || b.bin_id} (${b.qty_on_hand} in stock)`
-      }));
-    });
-
-    self.transferFormValid = ko.computed(() => {
-      return self.transferForm.fromBin() && self.transferForm.toBin() &&
-        self.transferForm.fromBin() !== self.transferForm.toBin() &&
-        Number(self.transferForm.quantity()) > 0;
-    });
-
-    self.openTransfer = () => {
-      const item = self.scannedItem();
-      if (!item) return;
-      self.transferTarget(item);
-      self.transferForm.fromBin(item.bins && item.bins.length > 0 ? item.bins[0].bin_id : '');
-      self.transferForm.toBin('');
-      self.transferForm.quantity(1);
-      self.showTransferModal(true);
-    };
-
-    self.submitTransfer = async () => {
-      if (!self.transferFormValid()) return;
-      const item = self.transferTarget();
-      try {
-        const res = await fetch('/api/scanner/transfer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            itemId: item.itemId || item.itemid,
-            fromBin: self.transferForm.fromBin(),
-            toBin: self.transferForm.toBin(),
-            quantity: Number(self.transferForm.quantity())
-          })
-        });
-        const data = await res.json();
-        if (data.success) {
-          playChime('success');
-          self.closeAllModals();
-          self.setScanStatus(`✅ Moved to ${self.transferForm.toBin()}`, 'success', 3000);
-          // Refresh the scanned item
-          const barcode = item.upc || item.sku;
-          if (barcode) self.processBarcode(barcode);
-        } else {
-          alert(`Transfer failed: ${data.error}`);
-        }
-      } catch (err) {
-        alert(`Error: ${err.message}`);
-      }
-    };
-
-    // ── Location Modal ───────────────────────────────────────────────
-    self.showLocationModal = ko.observable(false);
-    self.selectedLocation = ko.observable(null);
-    self.locationItems = ko.observableArray([]);
-
-    self.openLocation = async (bin) => {
-      self.selectedLocation(bin);
-      self.locationItems([]);
-      self.showLocationModal(true);
-
-      // Load items in this bin from inventory
-      try {
-        const res = await fetch('/api/scanner/inventory');
-        const data = await res.json();
-        if (data.status === 'SUCCESS') {
-          const filtered = data.data
-            .filter(row => row.bin_id === bin.binnumber && row.qty_on_hand > 0)
-            .map(row => {
-              // Find image_url from inventory items
-              const found = self.inventoryItems().find(i => i.itemid === row.item_id);
-              return { ...row, image_url: found ? found.image_url : null };
-            });
-          self.locationItems(filtered);
-        }
-      } catch (_) {}
-    };
-
-    // ── Inventory Item Selection ─────────────────────────────────────
-    self.selectInventoryItem = (item) => {
-      self.scannedItem({
-        itemId: item.itemid,
-        itemid: item.itemid,
-        displayName: item.displayname,
-        displayname: item.displayname,
-        sku: item.sku,
-        upc: item.upc,
-        image_url: item.image_url,
-        bins: [] // will reload on lookup
+    try {
+      const res = await fetch('/api/scanner/transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
-      self.currentPage('scan');
-      // Re-lookup to get live bin data
-      self.processBarcode(item.upc || item.sku);
-    };
+      const data = await res.json();
+      const latency = Date.now() - start;
 
-    // ── Close All Modals ─────────────────────────────────────────────
-    self.closeAllModals = () => {
-      self.showAddItemModal(false);
-      self.showTransferModal(false);
-      self.showLocationModal(false);
-    };
+      if (data.success) {
+        if (self.soundEnabled()) scannerAudio.playSuccess();
+        self.flashSuccess(true);
+        setTimeout(function() { self.flashSuccess(false); }, 600);
 
-    // ── Data Loading ─────────────────────────────────────────────────
-    let binsLoaded = false;
+        self.feedbackType('success');
+        self.feedbackMessage('✓ Moved ' + payload.quantity + 'x to ' + payload.toBin + ' (' + data.transfer.transferId + ')');
 
-    self.loadBins = async () => {
-      if (binsLoaded) return;
-      try {
-        const res = await fetch('/api/scanner/bins');
-        const data = await res.json();
-        if (data.status === 'SUCCESS') {
-          self.kitchenBins(data.data);
-          binsLoaded = true;
+        self.logTelemetry({
+          badge: 'TRANSFER',
+          badgeClass: 'badge-transfer',
+          title: data.transfer.transferId + ': ' + payload.quantity + 'x ' + (item.sku || item.displayName),
+          message: payload.fromBin + ' ➔ ' + payload.toBin + ' | TBA Auth: ' + data.tbaSignature.substring(0, 16) + '...',
+          latency: latency
+        });
+
+        // Refresh inventory balances across UI
+        await self.refreshInventory();
+
+        // Refresh the selected item view
+        const barcodeToRefresh = item.upc || item.sku;
+        if (barcodeToRefresh) {
+          const checkRes = await fetch('/api/scanner/lookup?barcode=' + encodeURIComponent(barcodeToRefresh));
+          const checkData = await checkRes.json();
+          if (checkData.success && checkData.data) {
+            self.selectedItem(checkData.data);
+            if (checkData.data.bins && checkData.data.bins.length > 0) {
+              const currentFromStillHasStock = checkData.data.bins.find(function(b) { return b.bin_id === self.fromBin(); });
+              if (!currentFromStillHasStock) {
+                self.fromBin(checkData.data.bins[0].bin_id);
+              }
+            }
+          }
         }
-      } catch (_) {}
-    };
+      } else {
+        if (self.soundEnabled()) scannerAudio.playError();
+        self.flashError(true);
+        setTimeout(function() { self.flashError(false); }, 600);
 
-    self.loadInventory = async () => {
-      self.inventoryLoading(true);
+        self.feedbackType('error');
+        self.feedbackMessage('✕ ' + (data.error || 'Transfer failed'));
+
+        self.logTelemetry({
+          badge: 'ERROR',
+          badgeClass: 'badge-transfer',
+          title: 'Transfer Failed (' + (data.errorCode || 'ERP_REJECT') + ')',
+          message: data.error || 'Transaction rolled back',
+          latency: latency,
+          type: 'error'
+        });
+      }
+    } catch (err) {
+      if (self.soundEnabled()) scannerAudio.playError();
+      self.feedbackType('error');
+      self.feedbackMessage('✕ NetSuite connection failed: ' + err.message);
+    } finally {
+      self.isTransferring(false);
+    }
+  };
+
+  // --- Live Video Camera Scanner ---
+  self.toggleCameraScanner = function() {
+    if (self.cameraScanning()) {
+      self.stopCameraScanner();
+    } else {
+      self.startCameraScanner();
+    }
+  };
+
+  self.startCameraScanner = async function() {
+    self.cameraScanning(true);
+    self.feedbackType('info');
+    self.feedbackMessage('📷 Starting camera...');
+
+    setTimeout(async function() {
+      const videoEl = document.getElementById('terminalVideo');
+      if (!videoEl) return;
+
       try {
-        const res = await fetch('/api/scanner/items');
-        const data = await res.json();
-        if (data.success) self.inventoryItems(data.items);
-      } catch (_) {}
-      self.inventoryLoading(false);
-    };
+        if (window.ZXing && window.ZXing.BrowserMultiFormatReader) {
+          zxingReader = new window.ZXing.BrowserMultiFormatReader();
+          await zxingReader.decodeFromVideoDevice(null, 'terminalVideo', function(result, err) {
+            if (result && result.text) {
+              const code = result.text.trim();
+              if (code && code !== self.scannedBarcode()) {
+                self.stopCameraScanner();
+                self.scanDirect(code);
+              }
+            }
+          });
+          self.feedbackMessage('📷 Point camera at barcode');
+        } else if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          // Native fallback
+          cameraStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment' }
+          });
+          videoEl.srcObject = cameraStream;
+          self.feedbackMessage('📷 Camera active');
+        } else {
+          self.feedbackType('error');
+          self.feedbackMessage('⚠ Camera streaming requires HTTPS on remote IPs. Use Snap Barcode instead!');
+        }
+      } catch (e) {
+        self.feedbackType('error');
+        self.feedbackMessage('⚠ Camera access: ' + (e.message || 'Denied/Unavailable'));
+      }
+    }, 150);
+  };
 
-    self.loadHistory = async () => {
+  self.stopCameraScanner = function() {
+    self.cameraScanning(false);
+    if (zxingReader) {
+      try { zxingReader.reset(); } catch (_) {}
+      zxingReader = null;
+    }
+    if (cameraStream) {
       try {
-        const res = await fetch('/api/scanner/transfers');
-        const data = await res.json();
-        if (data.status === 'SUCCESS') self.transferHistory(data.data);
+        cameraStream.getTracks().forEach(function(t) { t.stop(); });
       } catch (_) {}
+      cameraStream = null;
+    }
+  };
+
+  // --- Universal Photo Barcode Scanner (Works on iOS/Android over HTTP) ---
+  self.handlePhotoBarcodeScan = function(data, event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+
+    self.isProcessing(true);
+    self.feedbackType('info');
+    self.feedbackMessage('🔍 Analyzing barcode from photo...');
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const img = new Image();
+      img.onload = async function() {
+        try {
+          // 1. Try BarcodeDetector if available
+          if ('BarcodeDetector' in window) {
+            const detector = new BarcodeDetector();
+            const codes = await detector.detect(img);
+            if (codes && codes.length > 0) {
+              const raw = codes[0].rawValue;
+              self.scanDirect(raw);
+              return;
+            }
+          }
+          // 2. Try ZXing
+          if (window.ZXing && window.ZXing.BrowserMultiFormatReader) {
+            const zx = new window.ZXing.BrowserMultiFormatReader();
+            const result = await zx.decodeFromImage(img);
+            if (result && result.text) {
+              self.scanDirect(result.text);
+              return;
+            }
+          }
+          self.feedbackType('error');
+          self.feedbackMessage('⚠ Could not detect a clear barcode in this photo. Try again or enter manually.');
+        } catch (_) {
+          self.feedbackType('error');
+          self.feedbackMessage('⚠ Barcode not clearly legible in photo. Enter manually.');
+        } finally {
+          self.isProcessing(false);
+          event.target.value = '';
+        }
+      };
+      img.src = e.target.result;
     };
+    reader.readAsDataURL(file);
+  };
 
-    self.loadIfNeeded = () => {
-      self.loadBins();
+  // --- Item Registration Flow ---
+  self.openAddItemModal = function() {
+    self.registerForm.upc(self.scannedBarcode() || '');
+    self.registerForm.displayname('');
+    self.registerForm.notes('');
+    self.registerForm.binId(self.allWarehouseBinsData().length > 0 ? self.allWarehouseBinsData()[0].binnumber : '');
+    self.registerForm.quantity(1);
+    self.registerForm.previewUrl('');
+    self.registerForm.fileObj = null;
+    self.showRegisterModal(true);
+  };
+
+  self.registerUnknownBarcode = function() {
+    self.openAddItemModal();
+    if (self.unknownBarcodeScanned()) {
+      self.registerForm.upc(self.unknownBarcodeScanned());
+    }
+  };
+
+  self.closeRegisterModal = function() {
+    self.showRegisterModal(false);
+  };
+
+  self.handleRegisterPhotoSelect = function(data, event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    self.registerForm.fileObj = file;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      self.registerForm.previewUrl(e.target.result);
     };
+    reader.readAsDataURL(file);
+  };
 
-    self.formatDate = (dateStr) => {
-      if (!dateStr) return '';
-      const d = new Date(dateStr);
-      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    };
+  self.submitRegisterItem = async function() {
+    if (!self.isRegisterFormValid()) return;
 
-    // ── Initialize ───────────────────────────────────────────────────
-    self.loadBins();
-    self.loadInventory();
-  }
+    const upc = self.registerForm.upc().trim();
+    const displayname = self.registerForm.displayname().trim();
+    const notes = self.registerForm.notes().trim();
+    const binId = self.registerForm.binId();
+    const quantity = Number(self.registerForm.quantity()) || 1;
 
-  ko.applyBindings(new AppViewModel(), document.body);
+    try {
+      // 1. Create Item Record
+      const itemRes = await fetch('/api/scanner/items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ upc: upc, displayname: displayname, notes: notes })
+      });
+      const itemData = await itemRes.json();
+      if (!itemData.success) {
+        alert('Could not register item: ' + itemData.error);
+        return;
+      }
 
-})();
+      const itemId = itemData.item.itemid;
+
+      // 2. Upload Photo if selected
+      if (self.registerForm.fileObj) {
+        const formData = new FormData();
+        formData.append('image', self.registerForm.fileObj);
+        await fetch('/api/scanner/items/' + itemId + '/image', {
+          method: 'POST',
+          body: formData
+        });
+      }
+
+      // 3. Add initial inventory stock to location
+      if (binId && quantity > 0) {
+        await fetch('/api/scanner/items/' + itemId + '/stock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ binId: binId, qty: quantity })
+        });
+      }
+
+      self.closeRegisterModal();
+      self.unknownBarcodeScanned(null);
+      if (self.soundEnabled()) scannerAudio.playSuccess();
+
+      // Refresh inventory and immediately scan the newly registered item
+      await self.refreshInventory();
+      self.scanDirect(upc);
+
+    } catch (err) {
+      alert('Error saving item: ' + err.message);
+    }
+  };
+
+  // --- Phone Pairing QR Modal ---
+  self.openPhoneModal = function() {
+    self.showPhoneModal(true);
+    setTimeout(function() {
+      const container = document.getElementById('phoneQrCanvas');
+      if (!container) return;
+      container.innerHTML = '';
+      if (window.QRCode) {
+        qrCodeInstance = new QRCode(container, {
+          text: self.mobileUrl(),
+          width: 190,
+          height: 190,
+          colorDark: '#090d13',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      }
+    }, 100);
+  };
+
+  self.closePhoneModal = function() {
+    self.showPhoneModal(false);
+  };
+
+  // --- Data Loading & Initialization ---
+  self.refreshInventory = async function() {
+    try {
+      const res = await fetch('/api/scanner/inventory');
+      const data = await res.json();
+      if (data.status === 'SUCCESS' && Array.isArray(data.data)) {
+        self.inventoryList(data.data);
+      }
+    } catch (_) {}
+  };
+
+  self.loadBins = async function() {
+    try {
+      const res = await fetch('/api/scanner/bins');
+      const data = await res.json();
+      if (data.status === 'SUCCESS' && Array.isArray(data.data)) {
+        self.allWarehouseBinsData(data.data);
+      }
+    } catch (_) {}
+  };
+
+  self.loadServerInfo = async function() {
+    try {
+      const res = await fetch('/api/scanner/info');
+      const data = await res.json();
+      if (data.success) {
+        self.lanIP(data.lanIP || 'localhost');
+        self.port(data.port || 7370);
+      }
+    } catch (_) {}
+  };
+
+  // Initial Load
+  self.loadServerInfo();
+  self.loadBins().then(function() {
+    self.refreshInventory();
+  });
+}
+
+// Instantiate and bind
+const appVM = new ScannerViewModel();
+ko.applyBindings(appVM, document.querySelector('.app-layout'));
