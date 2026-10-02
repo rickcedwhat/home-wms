@@ -155,10 +155,11 @@ function ScannerViewModel() {
 
   self.isRegisterFormValid = ko.computed(function () {
     const f = self.registerForm;
-    return f.upc().trim().length > 0 && 
-           f.displayname().trim().length > 0 && 
-           f.binId().length > 0 && 
-           Number(f.quantity()) > 0;
+    const upc = f.upc() ? String(f.upc()).trim() : '';
+    const name = f.displayname() ? String(f.displayname()).trim() : '';
+    const bin = f.binId() ? String(f.binId()).trim() : '';
+    const qty = Number(f.quantity()) || 0;
+    return upc.length > 0 && name.length > 0 && bin.length > 0 && qty > 0;
   });
 
   // Track Open/Close state per bin
@@ -288,13 +289,15 @@ function ScannerViewModel() {
   // --- Computed: Transfer Dropdown Options ---
   self.sourceBinOptions = ko.computed(function() {
     const item = self.selectedItem();
-    if (!item || !item.bins) return [];
+    if (!item || !Array.isArray(item.bins)) return [];
     return item.bins.map(function(b) { return b.bin_id; });
   });
 
   self.destBinOptions = ko.computed(function() {
     const currentFrom = self.fromBin();
-    return self.allWarehouseBinsData()
+    const bins = self.allWarehouseBinsData();
+    if (!Array.isArray(bins)) return [];
+    return bins
       .map(function(b) { return b.binnumber; })
       .filter(function(b) { return b !== currentFrom; });
   });
@@ -302,7 +305,7 @@ function ScannerViewModel() {
   self.availableInFromBin = ko.computed(function() {
     const item = self.selectedItem();
     const from = self.fromBin();
-    if (!item || !from || !item.bins) return 0;
+    if (!item || !from || !Array.isArray(item.bins)) return 0;
     const binRow = item.bins.find(function(b) { return b.bin_id === from; });
     return binRow ? binRow.qty_on_hand : 0;
   });
@@ -384,14 +387,18 @@ function ScannerViewModel() {
         self.flashSuccess(true);
         setTimeout(function() { self.flashSuccess(false); }, 400);
 
-        self.selectedItem(data.data);
+        const itemObj = {
+          ...data.data,
+          bins: Array.isArray(data.data.bins) ? data.data.bins : []
+        };
+        self.selectedItem(itemObj);
         self.transferQty(1);
 
         // Pre-select first available bin with stock
-        if (data.data.bins && data.data.bins.length > 0) {
-          self.fromBin(data.data.bins[0].bin_id);
+        if (itemObj.bins.length > 0) {
+          self.fromBin(itemObj.bins[0].bin_id);
           const other = self.allWarehouseBinsData().find(function (b) {
-            return b.binnumber !== data.data.bins[0].bin_id;
+            return b.binnumber !== itemObj.bins[0].bin_id;
           });
           if (other) self.toBin(other.binnumber);
         } else {
@@ -402,11 +409,12 @@ function ScannerViewModel() {
         self.feedbackType('success');
         self.feedbackMessage('✓ Found: ' + (data.data.displayName || data.data.displayname));
 
+        const sym = (data.parsedBarcode && (data.parsedBarcode.type || data.parsedBarcode.symbology)) || 'Barcode';
         self.logTelemetry({
           badge: data.source === 'CACHE' ? 'CACHE-HIT' : 'NETSUITE',
           badgeClass: data.source === 'CACHE' ? 'badge-cache' : 'badge-erp',
           title: 'Lookup: ' + (data.data.displayName || data.data.sku),
-          message: 'Parsed: ' + data.parsedBarcode.identifier + ' (' + data.parsedBarcode.symbology + ') via ' + data.source,
+          message: 'Parsed: ' + (data.parsedBarcode ? data.parsedBarcode.identifier : rawBarcode) + ' (' + sym + ') via ' + data.source,
           latency: latency
         });
 
@@ -815,10 +823,10 @@ function ScannerViewModel() {
   self.submitRegisterItem = async function() {
     if (!self.isRegisterFormValid()) return;
 
-    const upc = self.registerForm.upc().trim();
-    const displayname = self.registerForm.displayname().trim();
-    const notes = self.registerForm.notes().trim();
-    const binId = self.registerForm.binId();
+    const upc = self.registerForm.upc() ? String(self.registerForm.upc()).trim() : '';
+    const displayname = self.registerForm.displayname() ? String(self.registerForm.displayname()).trim() : '';
+    const notes = self.registerForm.notes() ? String(self.registerForm.notes()).trim() : '';
+    const binId = self.registerForm.binId() ? String(self.registerForm.binId()).trim() : '';
     const quantity = Number(self.registerForm.quantity()) || 1;
 
     try {
@@ -861,10 +869,12 @@ function ScannerViewModel() {
 
       // Refresh inventory and immediately scan the newly registered item
       await self.refreshInventory();
-      self.scanDirect(upc);
+      if (upc) {
+        await self.executeBarcodeLookup(upc);
+      }
 
     } catch (err) {
-      alert('Error saving item: ' + err.message);
+      alert('Error saving item: ' + (err.message || err));
     }
   };
 

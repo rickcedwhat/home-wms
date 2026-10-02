@@ -238,7 +238,7 @@
               <!-- Available Locations for this Item -->
               <div class="item-locations">
                 <span class="section-label">CURRENT LOCATIONS (TAP TO SELECT SOURCE):</span>
-                <div class="source-bins-list" data-bind="foreach: bins">
+                <div class="source-bins-list" data-bind="foreach: (typeof bins !== 'undefined' && Array.isArray(bins)) ? bins : []">
                   <button class="bin-select-btn font-mono" data-bind="click: function() { $root.selectSourceBin(bin_id); }, css: { 'selected': $root.fromBin() === bin_id }">
                     <span class="bin-num" data-bind="text: display_label || bin_id"></span>
                     <span class="bin-stock" data-bind="text: qty_on_hand + ' avail'"></span>
@@ -390,8 +390,8 @@
               <!-- ko if: isOpen -->
               <div class="shelf-content">
                 <!-- Square Items Grid -->
-                <!-- ko if: items.length > 0 -->
-                <div class="square-items-row" data-bind="foreach: items">
+                <!-- ko if: $data.items && items.length > 0 -->
+                <div class="square-items-row" data-bind="foreach: items || []">
                   <div class="square-item-box" data-bind="click: function() { $root.selectItemFromBin($data, $parent.binId); }, css: { 'active-box': $root.selectedItem() && $root.selectedItem().sku === sku && $root.fromBin() === $parent.binId }">
                     <div class="box-top">
                       <!-- ko if: image_url -->
@@ -410,7 +410,7 @@
                 <!-- /ko -->
 
                 <!-- Empty Bin Notice -->
-                <!-- ko if: items.length === 0 -->
+                <!-- ko if: !$data.items || items.length === 0 -->
                 <div class="empty-shelf-notice">
                   <span class="empty-icon">📭</span>
                   <span class="empty-text">Empty Location &bull; 0 items stored here</span>

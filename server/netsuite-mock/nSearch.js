@@ -142,6 +142,8 @@ class MockSearch {
           ib.item_id,
           i.sku,
           i.displayname,
+          i.upc,
+          i.image_url,
           ib.bin_id,
           ib.qty_on_hand
         FROM inventory_balances ib
