@@ -82,16 +82,41 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   const lanIP = getLanIP();
   console.log('================================================================');
   console.log(` RF-SMART Prototype running on port ${PORT}`);
-  console.log(` Desktop:     http://localhost:${PORT}`);
-  console.log(` 📱 Phone:    http://${lanIP}:${PORT}     ← open on your phone`);
-  console.log(` Code Studio: http://localhost:${PORT}/code`);
+  console.log(` Desktop:       http://localhost:${PORT}`);
+  console.log(` 📱 Phone HTTP:  http://${lanIP}:${PORT}     ← open on your phone`);
+  console.log(` 🔒 Phone HTTPS: https://${lanIP}:7373    ← live camera WebRTC`);
+  console.log(` Code Studio:   http://localhost:${PORT}/code`);
   console.log('================================================================');
 });
+
+// Optional HTTPS server on port 7373 for browsers requiring secure context for getUserMedia
+import https from 'node:https';
+import fs from 'node:fs';
+
+const HTTPS_PORT = 7373;
+let httpsServer = null;
+
+try {
+  const keyPath = path.join(__dirname, '..', 'certs', 'key.pem');
+  const certPath = path.join(__dirname, '..', 'certs', 'cert.pem');
+  if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+    const creds = {
+      key: fs.readFileSync(keyPath),
+      cert: fs.readFileSync(certPath)
+    };
+    httpsServer = https.createServer(creds, app).listen(HTTPS_PORT, '0.0.0.0', () => {
+      // Running HTTPS for WebRTC
+    });
+  }
+} catch (e) {
+  console.warn('[HTTPS] Skipped HTTPS server:', e.message);
+}
 
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\nShutting down RF-SMART Prototype cleanly...');
   server.close(() => {
+    if (httpsServer) httpsServer.close();
     process.exit(0);
   });
 });

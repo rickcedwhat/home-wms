@@ -163,7 +163,8 @@
 
               <!-- Camera Scanner Buttons Row -->
               <div class="camera-actions-row">
-                <!-- Live Video Camera Button -->
+                <!-- If browser supports live getUserMedia on this origin (e.g. localhost or HTTPS) -->
+                <!-- ko if: supportsLiveVideo -->
                 <button class="btn-cam-toggle" data-bind="click: toggleCameraScanner, css: { 'active': cameraScanning }">
                   <!-- ko ifnot: cameraScanning -->
                   <span>📷 Live Camera</span>
@@ -172,12 +173,19 @@
                   <span>⏹ Close Camera</span>
                   <!-- /ko -->
                 </button>
-
-                <!-- Snap Photo Barcode Capture (Universal on iOS/Android over HTTP) -->
                 <label class="btn-cam-snap" title="Take photo of barcode with camera">
-                  <span>📸 Snap Barcode</span>
-                  <input type="file" accept="image/*" capture="environment" data-bind="event: { change: handlePhotoBarcodeScan }" />
+                  <span>📸 Snap Photo</span>
+                  <input id="snapBarcodeInput" type="file" accept="image/*" capture="environment" data-bind="event: { change: handlePhotoBarcodeScan }" />
                 </label>
+                <!-- /ko -->
+
+                <!-- If mobile browser on plain HTTP where getUserMedia is restricted -->
+                <!-- ko ifnot: supportsLiveVideo -->
+                <label class="btn-cam-snap btn-cam-primary-snap" title="Take photo of barcode with camera">
+                  <span>📷 Scan with Camera</span>
+                  <input id="snapBarcodeInput" type="file" accept="image/*" capture="environment" data-bind="event: { change: handlePhotoBarcodeScan }" />
+                </label>
+                <!-- /ko -->
               </div>
 
               <!-- Live Camera Viewfinder Overlay -->
@@ -576,7 +584,17 @@
       </div>
 
       <div class="modal-body text-center">
-        <p class="modal-intro">Make sure your phone is connected to the same Wi-Fi network as this Mac.</p>
+        <p class="modal-intro">Connect your phone to the same Wi-Fi as this Mac, then scan the QR code below:</p>
+
+        <!-- Protocol Switcher -->
+        <div class="qr-protocol-toggle">
+          <button class="qr-proto-btn" data-bind="click: function() { setPhoneQrProtocol('http'); }, css: { 'active': phoneQrProtocol() === 'http' }">
+            ⚡ HTTP :7370 (Instant • Camera Snap)
+          </button>
+          <button class="qr-proto-btn" data-bind="click: function() { setPhoneQrProtocol('https'); }, css: { 'active': phoneQrProtocol() === 'https' }">
+            🔒 HTTPS :7373 (Live Video Stream)
+          </button>
+        </div>
         
         <!-- Scannable QR Code Canvas -->
         <div class="qr-code-wrapper">
@@ -584,10 +602,16 @@
         </div>
 
         <div class="phone-url-box">
-          <span class="url-label">Direct URL:</span>
-          <a class="phone-url-link font-mono" data-bind="attr: { href: mobileUrl }, text: mobileUrl" target="_blank"></a>
+          <span class="url-label" data-bind="text: phoneQrProtocol() === 'https' ? 'Secure URL:' : 'Direct URL:'"></span>
+          <a class="phone-url-link font-mono" data-bind="attr: { href: activeQrUrl }, text: activeQrUrl" target="_blank"></a>
         </div>
-        <p class="phone-tip">Point your iPhone or Android camera at the QR code above to open the scanner instantly.</p>
+        
+        <!-- ko if: phoneQrProtocol() === 'http' -->
+        <p class="phone-tip">✓ No SSL certificate warning. Barcodes are scanned instantly using the native camera snap.</p>
+        <!-- /ko -->
+        <!-- ko if: phoneQrProtocol() === 'https' -->
+        <p class="phone-tip">Enables real-time WebRTC video streaming. Tap "Advanced &rarr; Proceed" if Safari shows a local cert warning.</p>
+        <!-- /ko -->
       </div>
 
       <div class="modal-footer">

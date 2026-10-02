@@ -124,8 +124,17 @@ function ScannerViewModel() {
   // Network info for phone access
   self.lanIP = ko.observable('localhost');
   self.port = ko.observable(7370);
+  self.httpsPort = ko.observable(7373);
+  self.phoneQrProtocol = ko.observable('http'); // 'http' | 'https'
+
   self.mobileUrl = ko.computed(function () {
     return 'http://' + self.lanIP() + ':' + self.port();
+  });
+  self.httpsUrl = ko.computed(function () {
+    return 'https://' + self.lanIP() + ':' + self.httpsPort();
+  });
+  self.activeQrUrl = ko.computed(function () {
+    return self.phoneQrProtocol() === 'https' ? self.httpsUrl() : self.mobileUrl();
   });
 
   // Phone QR Code Modal
@@ -598,6 +607,19 @@ function ScannerViewModel() {
   };
 
   // --- Live Video Camera Scanner ---
+  self.supportsLiveVideo = ko.observable(
+    typeof navigator !== 'undefined' && 
+    !!navigator.mediaDevices && 
+    typeof navigator.mediaDevices.getUserMedia === 'function'
+  );
+
+  self.triggerCameraSnap = function() {
+    const snapInput = document.getElementById('snapBarcodeInput');
+    if (snapInput) {
+      snapInput.click();
+    }
+  };
+
   self.toggleCameraScanner = function() {
     if (self.cameraScanning()) {
       self.stopCameraScanner();
@@ -607,6 +629,17 @@ function ScannerViewModel() {
   };
 
   self.startCameraScanner = async function() {
+    // If the browser does not support live WebRTC on this origin (e.g. mobile Safari on plain HTTP),
+    // automatically fall back to the native camera snap without throwing an error!
+    if (!self.supportsLiveVideo()) {
+      self.feedbackType('info');
+      self.feedbackMessage('📸 Opening camera snap (live video stream requires HTTPS on mobile)...');
+      setTimeout(function() {
+        self.triggerCameraSnap();
+      }, 100);
+      return;
+    }
+
     self.cameraScanning(true);
     self.feedbackType('info');
     self.feedbackMessage('📷 Starting camera...');
@@ -629,19 +662,20 @@ function ScannerViewModel() {
           });
           self.feedbackMessage('📷 Point camera at barcode');
         } else if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          // Native fallback
           cameraStream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: 'environment' }
           });
           videoEl.srcObject = cameraStream;
           self.feedbackMessage('📷 Camera active');
         } else {
-          self.feedbackType('error');
-          self.feedbackMessage('⚠ Camera streaming requires HTTPS on remote IPs. Use Snap Barcode instead!');
+          self.stopCameraScanner();
+          self.triggerCameraSnap();
         }
       } catch (e) {
-        self.feedbackType('error');
-        self.feedbackMessage('⚠ Camera access: ' + (e.message || 'Denied/Unavailable'));
+        self.stopCameraScanner();
+        self.feedbackType('info');
+        self.feedbackMessage('📸 Using camera photo capture...');
+        self.triggerCameraSnap();
       }
     }, 150);
   };
@@ -674,30 +708,66 @@ function ScannerViewModel() {
       const img = new Image();
       img.onload = async function() {
         try {
-          // 1. Try BarcodeDetector if available
-          if ('BarcodeDetector' in window) {
-            const detector = new BarcodeDetector();
-            const codes = await detector.detect(img);
-            if (codes && codes.length > 0) {
-              const raw = codes[0].rawValue;
-              self.scanDirect(raw);
-              return;
+          // Scale to max dimension 1280px to optimize decode speed and avoid mobile memory limits
+          const maxDim = 1280;
+          let w = img.width;
+          let h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) {
+              h = Math.round((h * maxDim) / w);
+              w = maxDim;
+            } else {
+              w = Math.round((w * maxDim) / h);
+              h = maxDim;
             }
           }
-          // 2. Try ZXing
+
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+
+          // 1. Try native BarcodeDetector if available
+          if ('BarcodeDetector' in window) {
+            try {
+              const formats = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code'];
+              const detector = new BarcodeDetector({ formats: formats });
+              const codes = await detector.detect(canvas);
+              if (codes && codes.length > 0) {
+                const raw = codes[0].rawValue;
+                self.scanDirect(raw);
+                return;
+              }
+            } catch (_) {}
+          }
+
+          // 2. Try ZXing on the scaled image
           if (window.ZXing && window.ZXing.BrowserMultiFormatReader) {
             const zx = new window.ZXing.BrowserMultiFormatReader();
-            const result = await zx.decodeFromImage(img);
-            if (result && result.text) {
-              self.scanDirect(result.text);
-              return;
-            }
+            // Create a scaled image element from the canvas
+            const scaledImg = new Image();
+            scaledImg.onload = async function() {
+              try {
+                const result = await zx.decodeFromImageElement(scaledImg);
+                if (result && result.text) {
+                  self.scanDirect(result.text.trim());
+                  return;
+                }
+              } catch (_) {
+                self.feedbackType('error');
+                self.feedbackMessage('⚠ Barcode not clearly legible. Hold closer with good lighting or type manually.');
+              }
+            };
+            scaledImg.src = canvas.toDataURL('image/jpeg', 0.9);
+            return;
           }
+
           self.feedbackType('error');
-          self.feedbackMessage('⚠ Could not detect a clear barcode in this photo. Try again or enter manually.');
-        } catch (_) {
+          self.feedbackMessage('⚠ Could not read barcode from this photo. Try typing it above.');
+        } catch (err) {
           self.feedbackType('error');
-          self.feedbackMessage('⚠ Barcode not clearly legible in photo. Enter manually.');
+          self.feedbackMessage('⚠ Photo scan failed: ' + (err.message || 'unreadable'));
         } finally {
           self.isProcessing(false);
           event.target.value = '';
@@ -799,22 +869,31 @@ function ScannerViewModel() {
   };
 
   // --- Phone Pairing QR Modal ---
+  self.setPhoneQrProtocol = function(proto) {
+    self.phoneQrProtocol(proto);
+    self.renderPhoneQr();
+  };
+
+  self.renderPhoneQr = function() {
+    const container = document.getElementById('phoneQrCanvas');
+    if (!container) return;
+    container.innerHTML = '';
+    if (window.QRCode) {
+      new QRCode(container, {
+        text: self.activeQrUrl(),
+        width: 190,
+        height: 190,
+        colorDark: '#090d13',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+    }
+  };
+
   self.openPhoneModal = function() {
     self.showPhoneModal(true);
     setTimeout(function() {
-      const container = document.getElementById('phoneQrCanvas');
-      if (!container) return;
-      container.innerHTML = '';
-      if (window.QRCode) {
-        qrCodeInstance = new QRCode(container, {
-          text: self.mobileUrl(),
-          width: 190,
-          height: 190,
-          colorDark: '#090d13',
-          colorLight: '#ffffff',
-          correctLevel: QRCode.CorrectLevel.M
-        });
-      }
+      self.renderPhoneQr();
     }, 100);
   };
 

@@ -1705,3 +1705,47 @@ body {
     display: none !important;
   }
 }
+
+/* Primary Camera Snap Button (for browsers without live getUserMedia WebRTC) */
+.btn-cam-primary-snap {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+  color: #fff !important;
+  border-color: #3b82f6 !important;
+  font-weight: 800 !important;
+  font-size: 0.78rem !important;
+  padding: 0.55rem !important;
+}
+
+.btn-cam-primary-snap:hover {
+  filter: brightness(1.15);
+}
+
+/* QR Protocol Switcher */
+.qr-protocol-toggle {
+  display: flex;
+  background: #090d14;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  margin-bottom: 0.5rem;
+  gap: 3px;
+}
+
+.qr-proto-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.qr-proto-btn.active {
+  background: var(--amber);
+  color: #000;
+}
+

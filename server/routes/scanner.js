@@ -66,7 +66,8 @@ router.get('/info', (req, res) => {
     success: true,
     lanIP,
     port,
-    mobileUrl: `http://${lanIP}:${port}`
+    mobileUrl: `http://${lanIP}:${port}`,
+    httpsUrl: `https://${lanIP}:7373`
   });
 });
 
