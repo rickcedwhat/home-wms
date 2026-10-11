@@ -120,13 +120,27 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 // Optional HTTPS server on port 7373 for browsers requiring secure context for getUserMedia
 import https from 'node:https';
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 
 const HTTPS_PORT = 7373;
 let httpsServer = null;
 
 try {
-  const keyPath = path.join(__dirname, '..', 'certs', 'key.pem');
-  const certPath = path.join(__dirname, '..', 'certs', 'cert.pem');
+  const certsDir = path.join(__dirname, '..', 'certs');
+  const keyPath = path.join(certsDir, 'key.pem');
+  const certPath = path.join(certsDir, 'cert.pem');
+
+  if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
+    fs.mkdirSync(certsDir, { recursive: true });
+    execFileSync('openssl', [
+      'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+      '-keyout', keyPath,
+      '-out', certPath,
+      '-days', '365',
+      '-subj', '/CN=localhost'
+    ], { stdio: 'ignore' });
+  }
+
   if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
     const creds = {
       key: fs.readFileSync(keyPath),
