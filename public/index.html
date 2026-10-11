@@ -247,17 +247,32 @@
               </div>
             </div>
 
-            <!-- Transfer Configuration Form -->
+            <!-- Active Item Workflow Tabs: Transfer vs Restock -->
+            <div class="item-workflow-tabs">
+              <button class="workflow-tab-btn" data-bind="click: function() { itemWorkflowMode('transfer'); }, css: { 'active': itemWorkflowMode() === 'transfer' }">
+                📦 Move Location
+              </button>
+              <button class="workflow-tab-btn" data-bind="click: function() { itemWorkflowMode('restock'); }, css: { 'active': itemWorkflowMode() === 'restock' }">
+                ＋ Add / Restock
+              </button>
+            </div>
+
+            <!-- MODE 1: Transfer Configuration Form (Move between Bins) -->
+            <!-- ko if: itemWorkflowMode() === 'transfer' -->
             <div class="transfer-form-panel">
               <div class="bin-routing-row">
                 <div class="routing-box">
                   <span class="route-label">FROM (SOURCE)</span>
-                  <select class="clean-select font-mono" data-bind="options: sourceBinOptions, value: fromBin, optionsCaption: '-- Source Location --'"></select>
+                  <select class="clean-select font-mono" data-bind="options: sourceBinOptions,
+                    optionsText: function(b) { return $root.getFriendlyBinLabel(b); },
+                    value: fromBin, optionsCaption: '-- Source Location --'"></select>
                 </div>
                 <div class="routing-arrow">&rarr;</div>
                 <div class="routing-box">
                   <span class="route-label">TO (DESTINATION)</span>
-                  <select class="clean-select font-mono" data-bind="options: destBinOptions, value: toBin, optionsCaption: '-- Destination --'"></select>
+                  <select class="clean-select font-mono" data-bind="options: destBinOptions,
+                    optionsText: function(b) { return $root.getFriendlyBinLabel(b); },
+                    value: toBin, optionsCaption: '-- Destination --'"></select>
                 </div>
               </div>
 
@@ -285,6 +300,39 @@
                 <!-- /ko -->
               </button>
             </div>
+            <!-- /ko -->
+
+            <!-- MODE 2: Restock / Add Quantity Form -->
+            <!-- ko if: itemWorkflowMode() === 'restock' -->
+            <div class="transfer-form-panel">
+              <div class="form-group">
+                <span class="route-label">RESTOCK INTO LOCATION</span>
+                <select class="clean-select font-mono" data-bind="options: allWarehouseBinsData,
+                  optionsText: function(b) { return (b.display_label || b.binnumber); },
+                  optionsValue: 'binnumber', value: restockBin">
+                </select>
+              </div>
+
+              <div class="qty-row">
+                <span class="route-label">QUANTITY TO ADD</span>
+                <div class="stepper">
+                  <button class="step-btn" data-bind="click: function() { if(restockQty() > 1) restockQty(restockQty() - 1); }">&minus;</button>
+                  <input type="number" class="qty-field font-mono" min="1" data-bind="textInput: restockQty" />
+                  <button class="step-btn" data-bind="click: function() { restockQty(Number(restockQty()) + 1); }">+</button>
+                </div>
+              </div>
+
+              <button class="btn-commit btn-commit-restock" data-bind="click: commitRestock, enable: !isRestocking() && restockBin()">
+                <!-- ko if: isRestocking -->
+                <span class="spinner-small"></span>
+                <span>ADDING STOCK...</span>
+                <!-- /ko -->
+                <!-- ko ifnot: isRestocking -->
+                <span>＋ ADD STOCK TO LOCATION</span>
+                <!-- /ko -->
+              </button>
+            </div>
+            <!-- /ko -->
             <!-- /ko -->
 
             <!-- ============================================================== -->

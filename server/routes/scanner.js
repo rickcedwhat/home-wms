@@ -20,6 +20,8 @@ import { concurrencyMutex } from '../services/concurrencyManager.js';
 import { generateTBAHeader } from '../services/auth.js';
 import restlet from '../netsuite-mock/restlet.js';
 import { getDatabase } from '../netsuite-mock/db.js';
+import { playServerSound } from '../services/sound.js';
+import { lookupOpenFoodFacts } from '../services/openFoodFacts.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -66,8 +68,8 @@ router.get('/info', (req, res) => {
     success: true,
     lanIP,
     port,
-    mobileUrl: `http://${lanIP}:${port}`,
-    httpsUrl: `https://${lanIP}:7373`
+    mobileUrl: `http://${lanIP}:${port}/mobile`,
+    httpsUrl: `https://${lanIP}:7373/mobile`
   });
 });
 
@@ -78,6 +80,7 @@ router.get('/info', (req, res) => {
 router.get('/lookup', async (req, res) => {
   const startTime = Date.now();
   const rawBarcode = req.query.barcode;
+  console.log(`\n🔍 [LOOKUP] Barcode: "${rawBarcode}", Mode: "${req.query.mode || ''}", Store: "${req.query.store || ''}"`);
 
   if (!rawBarcode) {
     return res.status(400).json({
@@ -86,12 +89,148 @@ router.get('/lookup', async (req, res) => {
     });
   }
 
+  // 1a. Command Barcode Interceptor (Mode switch: INTAKE, DISPOSE, TRANSFER | Store select: ALDI, WALMART, etc.)
+  const cleanStr = String(rawBarcode).trim();
+  if (cleanStr.startsWith('CMD:')) {
+    const parts = cleanStr.split(':');
+    const category = (parts[1] || '').toUpperCase();
+    const action = (parts[2] || '').toUpperCase();
+    playServerSound('transfer');
+
+    return res.json({
+      success: true,
+      isCommand: true,
+      category,
+      action,
+      code: cleanStr,
+      latencyMs: Date.now() - startTime
+    });
+  }
+
   // 1. Parse barcode (extract SKU, UPC, or GS1 Application Identifiers)
   const parsed = parseBarcode(rawBarcode);
+
+  // 1b. Check if barcode represents a Location / Bin (door sticker or warehouse bin)
+  const db = getDatabase(false);
+  const cleanId = String(rawBarcode).trim();
+  const cleanUpper = cleanId.toUpperCase();
+  const strippedUpper = cleanUpper.replace(/^BIN-/, '');
+
+  let foundBin = db.prepare(`
+    SELECT * FROM bins 
+    WHERE UPPER(binnumber) = ? 
+       OR UPPER(binnumber) = ? 
+       OR UPPER(barcode) = ? 
+       OR UPPER(barcode) = ?
+  `).get(cleanUpper, strippedUpper, cleanUpper, 'BIN-' + strippedUpper);
+
+  // Fuzzy location fallback in case barcode was partially read or shortened
+  if (!foundBin) {
+    if (cleanUpper.includes('PANTRY') && (cleanUpper.includes('BOT') || cleanUpper.includes('LOW'))) {
+      foundBin = db.prepare("SELECT * FROM bins WHERE binnumber = 'PANTRY-BOTTOM'").get();
+    } else if (cleanUpper.includes('PANTRY') && (cleanUpper.includes('TOP') || cleanUpper.includes('HIGH') || cleanUpper.includes('UP'))) {
+      foundBin = db.prepare("SELECT * FROM bins WHERE binnumber = 'PANTRY-TOP'").get();
+    } else if (cleanUpper === 'PANTRY' || cleanUpper === 'BIN-PANTRY') {
+      foundBin = db.prepare("SELECT * FROM bins WHERE binnumber = 'PANTRY'").get();
+    } else if (cleanUpper.startsWith('BIN-')) {
+      foundBin = db.prepare("SELECT * FROM bins WHERE UPPER(binnumber) = ? OR UPPER(barcode) = ?").get(strippedUpper, cleanUpper);
+    }
+  }
+
+  if (foundBin) {
+    playServerSound('location');
+    const latencyMs = Date.now() - startTime;
+    return res.json({
+      success: true,
+      isBin: true,
+      source: 'DATABASE',
+      latencyMs,
+      parsedBarcode: parsed,
+      bin: foundBin
+    });
+  }
+
+  // Optional scanning mode parameters
+  const scanMode = (req.query.mode || '').toUpperCase();
+  const activeStore = req.query.store || 'Aldi';
+
+  // Helper function to handle Intake or Disposal automated workflows
+  function handleModeWorkflows(itemData) {
+    if (!itemData) return null;
+
+    if (scanMode === 'INTAKE') {
+      const targetBin = itemData.default_bin_id || (itemData.bins && itemData.bins[0]?.bin_id);
+      if (targetBin) {
+        db.prepare(`
+          INSERT INTO inventory_balances (item_id, bin_id, qty_on_hand)
+          VALUES (?, ?, 1)
+          ON CONFLICT(item_id, bin_id) DO UPDATE SET qty_on_hand = qty_on_hand + 1
+        `).run(itemData.itemId || itemData.itemid, targetBin);
+
+        if (activeStore) {
+          db.prepare('UPDATE items SET store = ? WHERE itemid = ?').run(activeStore, itemData.itemId || itemData.itemid);
+        }
+
+        scanCache.invalidateByPattern((k, v) => v?.itemId === itemData.itemId || k === itemData.itemId);
+        playServerSound('transfer');
+
+        const newTotal = (itemData.totalQty || 0) + 1;
+        return {
+          success: true,
+          mode: 'INTAKE',
+          autoIncremented: true,
+          store: activeStore,
+          binId: targetBin,
+          newTotal,
+          item: { ...itemData, totalQty: newTotal, default_bin_id: targetBin, store: activeStore },
+          latencyMs: Date.now() - startTime
+        };
+      }
+    } else if (scanMode === 'DISPOSE') {
+      const stockBin = (itemData.bins || []).find(b => b.qty_on_hand > 0);
+      if (stockBin) {
+        db.prepare(`
+          UPDATE inventory_balances SET qty_on_hand = MAX(0, qty_on_hand - 1)
+          WHERE item_id = ? AND bin_id = ?
+        `).run(itemData.itemId || itemData.itemid, stockBin.bin_id);
+
+        const newTotal = Math.max(0, (itemData.totalQty || 1) - 1);
+        let addedToShoppingList = false;
+
+        if (newTotal === 0) {
+          db.prepare(`
+            INSERT INTO shopping_list (item_id, needed_qty, store)
+            VALUES (?, 1, ?)
+          `).run(itemData.itemId || itemData.itemid, itemData.store || activeStore);
+          addedToShoppingList = true;
+        }
+
+        scanCache.invalidateByPattern((k, v) => v?.itemId === itemData.itemId || k === itemData.itemId);
+        playServerSound('transfer');
+
+        return {
+          success: true,
+          mode: 'DISPOSE',
+          autoDecremented: true,
+          binId: stockBin.bin_id,
+          newTotal,
+          addedToShoppingList,
+          item: { ...itemData, totalQty: newTotal },
+          latencyMs: Date.now() - startTime
+        };
+      }
+    }
+
+    return null;
+  }
 
   // 2. Check in-memory cache first for sub-5ms response
   const cachedItem = scanCache.get(parsed.identifier);
   if (cachedItem) {
+    const modeResult = handleModeWorkflows(cachedItem);
+    if (modeResult) return res.json(modeResult);
+
+    playServerSound('scan');
     const latencyMs = Date.now() - startTime;
     return res.json({
       success: true,
@@ -117,6 +256,27 @@ router.get('/lookup', async (req, res) => {
   const latencyMs = Date.now() - startTime;
 
   if (restletResult.status === 'ERROR') {
+    // Check Open Food Facts before declaring unknown!
+    try {
+      console.log(`🌐 [OFF] Checking Open Food Facts for: "${parsed.identifier}"...`);
+      const offProduct = await lookupOpenFoodFacts(parsed.identifier);
+      if (offProduct) {
+        console.log(`✅ [OFF] Found: "${offProduct.displayName}" (brand: ${offProduct.brand})`);
+        playServerSound('scan');
+        return res.json({
+          success: true,
+          autoDiscovered: true,
+          product: offProduct,
+          latencyMs: Date.now() - startTime
+        });
+      } else {
+        console.log(`❌ [OFF] No product found on Open Food Facts for: "${parsed.identifier}"`);
+      }
+    } catch (offErr) {
+      console.log(`⚠️ [OFF] Error querying Open Food Facts: ${offErr.message}`);
+    }
+
+    playServerSound('error');
     return res.status(404).json({
       success: false,
       source: 'NETSUITE_RESTLET',
@@ -133,6 +293,10 @@ router.get('/lookup', async (req, res) => {
   if (restletResult.data.sku) scanCache.set(restletResult.data.sku, restletResult.data);
   if (restletResult.data.upc) scanCache.set(restletResult.data.upc, restletResult.data);
 
+  const modeResult = handleModeWorkflows(restletResult.data);
+  if (modeResult) return res.json(modeResult);
+
+  playServerSound('scan');
   return res.json({
     success: true,
     source: 'NETSUITE_RESTLET',
@@ -152,7 +316,7 @@ router.get('/items', (req, res) => {
   const db = getDatabase();
   const items = db.prepare(`
     SELECT 
-      i.itemid, i.sku, i.displayname, i.upc, i.image_url, i.notes,
+      i.itemid, i.sku, i.displayname, i.upc, i.image_url, i.notes, i.default_bin_id, i.store,
       COALESCE(SUM(b.qty_on_hand), 0) as total_qty
     FROM items i
     LEFT JOIN inventory_balances b ON i.itemid = b.item_id
@@ -164,11 +328,11 @@ router.get('/items', (req, res) => {
 
 /**
  * POST /api/scanner/items
- * Creates a new item (when barcode is scanned but not found in the system).
- * Body: { displayname, upc, notes, sku? }
+ * Creates a new item (when barcode is scanned but not found in the system, or autoDiscovered).
+ * Body: { displayname, upc, notes, sku?, default_bin_id?, store?, image_url?, initialQty? }
  */
 router.post('/items', (req, res) => {
-  const { displayname, upc, notes, sku } = req.body;
+  const { displayname, upc, notes, sku, default_bin_id, store, image_url, initialQty } = req.body;
 
   if (!displayname || !upc) {
     return res.status(400).json({
@@ -182,9 +346,27 @@ router.post('/items', (req, res) => {
   // Check if UPC already exists
   const existing = db.prepare('SELECT itemid FROM items WHERE upc = ?').get(upc);
   if (existing) {
-    return res.status(409).json({
-      success: false,
-      error: `An item with UPC "${upc}" already exists (id: ${existing.itemid})`
+    // If it exists, update default_bin_id / store / image_url if provided
+    if (default_bin_id || store || image_url) {
+      db.prepare(`
+        UPDATE items 
+        SET default_bin_id = COALESCE(?, default_bin_id),
+            store = COALESCE(?, store),
+            image_url = COALESCE(?, image_url)
+        WHERE itemid = ?
+      `).run(default_bin_id || null, store || null, image_url || null, existing.itemid);
+    }
+    if (initialQty && default_bin_id) {
+      db.prepare(`
+        INSERT INTO inventory_balances (item_id, bin_id, qty_on_hand)
+        VALUES (?, ?, ?)
+        ON CONFLICT(item_id, bin_id) DO UPDATE SET qty_on_hand = qty_on_hand + ?
+      `).run(existing.itemid, default_bin_id, Number(initialQty), Number(initialQty));
+    }
+    scanCache.invalidateByPattern((key, val) => val?.itemId === existing.itemid || key === upc);
+    return res.json({
+      success: true,
+      item: { itemid: existing.itemid, displayname, upc, default_bin_id, store, image_url }
     });
   }
 
@@ -195,17 +377,119 @@ router.post('/items', (req, res) => {
   const newSku = sku || `SKU-${newId}`;
 
   db.prepare(`
-    INSERT INTO items (itemid, sku, displayname, upc, item_type, notes)
-    VALUES (?, ?, ?, ?, 'GroceryItem', ?)
-  `).run(newId, newSku, displayname, upc, notes || null);
+    INSERT INTO items (itemid, sku, displayname, upc, item_type, notes, default_bin_id, store, image_url)
+    VALUES (?, ?, ?, ?, 'GroceryItem', ?, ?, ?, ?)
+  `).run(newId, newSku, displayname, upc, notes || null, default_bin_id || null, store || null, image_url || null);
+
+  if (initialQty && default_bin_id) {
+    db.prepare(`
+      INSERT INTO inventory_balances (item_id, bin_id, qty_on_hand)
+      VALUES (?, ?, ?)
+      ON CONFLICT(item_id, bin_id) DO UPDATE SET qty_on_hand = qty_on_hand + ?
+    `).run(newId, default_bin_id, Number(initialQty), Number(initialQty));
+  }
 
   // Invalidate cache for this UPC
   scanCache.invalidateByPattern((key) => key === upc || key === newSku);
 
+  playServerSound('transfer');
+
   res.json({
     success: true,
-    item: { itemid: newId, sku: newSku, displayname, upc, notes: notes || null }
+    item: { itemid: newId, sku: newSku, displayname, upc, notes: notes || null, default_bin_id: default_bin_id || null, store: store || null, image_url: image_url || null }
   });
+});
+
+/**
+ * PATCH /api/scanner/items/:id/default-bin
+ * Sets or updates the default bin location for an item.
+ */
+router.patch('/items/:id/default-bin', (req, res) => {
+  const { default_bin_id } = req.body;
+  if (!default_bin_id) {
+    return res.status(400).json({ success: false, error: 'default_bin_id is required' });
+  }
+
+  const db = getDatabase();
+  const item = db.prepare('SELECT itemid FROM items WHERE itemid = ?').get(req.params.id);
+  if (!item) {
+    return res.status(404).json({ success: false, error: 'Item not found' });
+  }
+
+  db.prepare('UPDATE items SET default_bin_id = ? WHERE itemid = ?').run(default_bin_id, req.params.id);
+  scanCache.invalidateByPattern((key, val) => val?.itemId === req.params.id || key === req.params.id);
+
+  playServerSound('transfer');
+  res.json({ success: true, default_bin_id });
+});
+
+/**
+ * GET /api/scanner/shopping-list
+ * Returns pending items that were depleted to 0.
+ */
+router.get('/shopping-list', (req, res) => {
+  const db = getDatabase();
+  const shoppingList = db.prepare(`
+    SELECT sl.id, sl.item_id, sl.needed_qty, sl.store, sl.status, sl.created_at,
+           i.displayname, i.image_url, i.sku, i.upc, i.default_bin_id
+    FROM shopping_list sl
+    JOIN items i ON sl.item_id = i.itemid
+    WHERE sl.status = 'PENDING'
+    ORDER BY sl.id DESC
+  `).all();
+  res.json({ success: true, shoppingList });
+});
+
+/**
+ * POST /api/scanner/shopping-list/:id/restock
+ * Restocks the item back into its default bin and removes it from the shopping list.
+ */
+router.post('/shopping-list/:id/restock', (req, res) => {
+  const db = getDatabase();
+  const entry = db.prepare('SELECT * FROM shopping_list WHERE id = ?').get(req.params.id);
+  if (!entry) {
+    return res.status(404).json({ success: false, error: 'Shopping list item not found' });
+  }
+
+  const item = db.prepare('SELECT * FROM items WHERE itemid = ?').get(entry.item_id);
+  const targetBin = item?.default_bin_id || 'PANTRY-BOTTOM';
+  const qty = entry.needed_qty || 1;
+
+  db.prepare(`
+    INSERT INTO inventory_balances (item_id, bin_id, qty_on_hand)
+    VALUES (?, ?, ?)
+    ON CONFLICT(item_id, bin_id) DO UPDATE SET qty_on_hand = qty_on_hand + ?
+  `).run(entry.item_id, targetBin, qty, qty);
+
+  db.prepare('DELETE FROM shopping_list WHERE id = ?').run(req.params.id);
+  scanCache.invalidateByPattern((k, v) => v?.itemId === entry.item_id || k === entry.item_id);
+  playServerSound('transfer');
+
+  res.json({
+    success: true,
+    message: `Restocked ${qty}x ${item?.displayname || 'item'} into ${targetBin}`,
+    binId: targetBin
+  });
+});
+
+/**
+ * DELETE /api/scanner/shopping-list/:id
+ * Removes or marks an item as purchased from the shopping list.
+ */
+router.delete('/shopping-list/:id', (req, res) => {
+  const db = getDatabase();
+  db.prepare('DELETE FROM shopping_list WHERE id = ?').run(req.params.id);
+  res.json({ success: true, message: 'Removed from shopping list' });
+});
+
+/**
+ * DELETE /api/scanner/shopping-list
+ * Clears all pending shopping list items.
+ */
+router.delete('/shopping-list', (req, res) => {
+  const db = getDatabase();
+  db.prepare('DELETE FROM shopping_list').run();
+  res.json({ success: true, message: 'Shopping list cleared' });
 });
 
 /**
@@ -264,6 +548,8 @@ router.post('/items/:id/stock', (req, res) => {
   // Invalidate cache
   scanCache.invalidateByPattern((key, val) => val?.itemId === req.params.id || key === req.params.id);
 
+  playServerSound('transfer');
+
   res.json({ success: true, message: `Added ${qty} units to ${binId}` });
 });
 
@@ -317,6 +603,7 @@ router.post('/transfer', async (req, res) => {
     const latencyMs = Date.now() - startTime;
 
     if (restletResponse.status === 'ERROR') {
+      playServerSound('error');
       const normalizedError = normalizeNetSuiteError(restletResponse.error);
       return res.status(normalizedError.httpStatus).json({
         success: false,
@@ -333,6 +620,8 @@ router.post('/transfer', async (req, res) => {
     scanCache.invalidateByPattern((key, val) => {
       return val?.itemId === itemId || key === itemId;
     });
+
+    playServerSound('transfer');
 
     return res.json({
       success: true,

@@ -54,8 +54,28 @@ app.get('/print-bins', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'print-bins.html'));
 });
 
+// Dedicated Mobile Scanner for phones (simplified, camera-focused UI)
+app.get(['/mobile', '/scan'], (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'mobile.html'));
+});
+
+// Explicit Desktop Simulation route
+app.get('/desktop', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+});
+
 // Serve uploaded item images
 app.use('/uploads', express.static(path.join(__dirname, '..', 'public', 'uploads')));
+
+// Root route: auto-direct mobile browsers to /mobile unless requested ?desktop=1
+app.get('/', (req, res, next) => {
+  const ua = req.headers['user-agent'] || '';
+  const isMobile = /iPhone|iPad|iPod|Android|Mobile/i.test(ua);
+  if (isMobile && !req.query.desktop) {
+    return res.redirect('/mobile');
+  }
+  next();
+});
 
 // Serve Frontend SPA static assets
 app.use(express.static(path.join(__dirname, '..', 'public')));

@@ -76,6 +76,8 @@ class MockSearch {
           i.base_price,
           i.image_url,
           i.notes,
+          i.default_bin_id,
+          i.store,
           COALESCE(SUM(b.qty_on_hand), 0) as total_qty
         FROM items i
         LEFT JOIN inventory_balances b ON i.itemid = b.item_id

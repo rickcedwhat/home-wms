@@ -11,70 +11,119 @@
  */
 
 // Web Audio API Synthesizer for Industrial Warehouse Scanners
+// Base64 WAV chimes for instant playback and iOS Safari fallback
+const SUCCESS_CHIRP_WAV = 'data:audio/wav;base64,UklGRkIYAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAYAAAA//8AAP//AAD//wAA//8AAP//AAD//wAA//8AAP//AAD//wAA//8AAP//AAD//wAA//8AAP//AAD//wAA//8AAP//AAD//wAA//8AAP//AAD//wAA//8AAP//AAD//wAA//8AAP//AAD//wAA//8AAP//AAD//wAA//8AAP//AAD//wAA//8AAP//AAD//wAA//8AAP//AAD//wAA//8AAP//AAD//wAA//8AAP//AAD//wAA//8AAP//AAD//wAA//8AAP//AAD//wAA//8AAP//AAD//wAA';
+
 class ScannerAudio {
   constructor() {
     this.ctx = null;
+    this.unlocked = false;
+    this.audioEl = null;
   }
 
   init() {
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (AudioCtx) this.ctx = new AudioCtx();
+      if (AudioCtx) {
+        this.ctx = new AudioCtx();
+      }
+    }
+  }
+
+  unlock() {
+    this.init();
+    if (this.unlocked) return;
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(function () {});
+    }
+    // Play a tiny silent buffer synchronously to unlock iOS Safari Web Audio
+    if (this.ctx) {
+      try {
+        const buffer = this.ctx.createBuffer(1, 1, 22050);
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(this.ctx.destination);
+        source.start(0);
+        this.unlocked = true;
+      } catch (_) {}
     }
   }
 
   playSuccess() {
+    this.init();
+    let played = false;
     try {
-      this.init();
-      if (!this.ctx) return;
-      if (this.ctx.state === 'suspended') this.ctx.resume();
+      if (this.ctx) {
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume().catch(function () {});
+        }
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
 
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        // Classic industrial dual-frequency chirp: 1800Hz jumping to 2400Hz
+        osc.frequency.setValueAtTime(1800, this.ctx.currentTime);
+        osc.frequency.setValueAtTime(2400, this.ctx.currentTime + 0.04);
 
-      osc.type = 'sine';
-      // Classic industrial dual-frequency chirp: 1800Hz jumping to 2400Hz
-      osc.frequency.setValueAtTime(1800, this.ctx.currentTime);
-      osc.frequency.setValueAtTime(2400, this.ctx.currentTime + 0.04);
+        gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
 
-      gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.14);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
 
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-
-      osc.start();
-      osc.stop(this.ctx.currentTime + 0.14);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.15);
+        played = true;
+      }
     } catch (_) {}
+
+    // HTML5 Audio fallback for mobile browsers
+    if (!played || (typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent))) {
+      try {
+        const a = new Audio(SUCCESS_CHIRP_WAV);
+        a.play().catch(function () {});
+      } catch (_) {}
+    }
   }
 
   playError() {
+    this.init();
     try {
-      this.init();
-      if (!this.ctx) return;
-      if (this.ctx.state === 'suspended') this.ctx.resume();
+      if (this.ctx) {
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume().catch(function () {});
+        }
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
 
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        // Industrial error buzz: 220Hz dropping to 180Hz
+        osc.frequency.setValueAtTime(220, this.ctx.currentTime);
+        osc.frequency.setValueAtTime(180, this.ctx.currentTime + 0.15);
 
-      osc.type = 'sawtooth';
-      // Harsh industrial error buzz: 220Hz dropping to 180Hz
-      osc.frequency.setValueAtTime(220, this.ctx.currentTime);
-      osc.frequency.setValueAtTime(180, this.ctx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
 
-      gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.32);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
 
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-
-      osc.start();
-      osc.stop(this.ctx.currentTime + 0.32);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.3);
+      }
     } catch (_) {}
   }
 }
 
 const scannerAudio = new ScannerAudio();
+
+// Unlock audio on the very first touch/click anywhere on the screen
+if (typeof document !== 'undefined') {
+  ['touchstart', 'touchend', 'click', 'pointerdown'].forEach(function(evt) {
+    document.addEventListener(evt, function() {
+      scannerAudio.unlock();
+    }, { once: false, passive: true });
+  });
+}
 
 function ScannerViewModel() {
   const self = this;
@@ -85,6 +134,12 @@ function ScannerViewModel() {
   self.fromBin = ko.observable('');
   self.toBin = ko.observable('');
   self.transferQty = ko.observable(1);
+
+  // Workflow mode on active item: 'transfer' (move) vs 'restock' (add units)
+  self.itemWorkflowMode = ko.observable('transfer');
+  self.restockBin = ko.observable('');
+  self.restockQty = ko.observable(1);
+  self.isRestocking = ko.observable(false);
 
   self.isProcessing = ko.observable(false);
   self.isTransferring = ko.observable(false);
@@ -287,6 +342,16 @@ function ScannerViewModel() {
   });
 
   // --- Computed: Transfer Dropdown Options ---
+  self.getFriendlyBinLabel = function(binNumber) {
+    if (!binNumber) return '';
+    const b = self.allWarehouseBinsData().find(function(x) { return x.binnumber === binNumber; });
+    if (b && b.display_label) return b.display_label;
+    if (binNumber === 'PANTRY-TOP') return '🚪 Pantry Top';
+    if (binNumber === 'PANTRY-BOTTOM') return '🚪 Pantry Bottom';
+    if (binNumber === 'PANTRY') return '🥫 Pantry (Main)';
+    return '📦 ' + binNumber;
+  };
+
   self.sourceBinOptions = ko.computed(function() {
     const item = self.selectedItem();
     if (!item || !Array.isArray(item.bins)) return [];
@@ -372,6 +437,44 @@ function ScannerViewModel() {
   self.executeBarcodeLookup = async function(rawBarcode) {
     if (!rawBarcode || self.isProcessing()) return;
 
+    const cleanCode = String(rawBarcode).trim();
+
+    // 1. Check if user is scanning a Location/Bin barcode (e.g. door sticker)
+    const matchingBin = self.allWarehouseBinsData().find(function (b) {
+      return b.binnumber === cleanCode || 
+             b.barcode === cleanCode || 
+             cleanCode.toUpperCase() === 'BIN-' + b.binnumber.toUpperCase() ||
+             cleanCode.toUpperCase() === b.binnumber.toUpperCase();
+    });
+
+    if (matchingBin) {
+      if (self.selectedItem()) {
+        if (matchingBin.binnumber === self.fromBin()) {
+          self.feedbackType('error');
+          self.feedbackMessage('⚠ Destination cannot be the same as source (' + (matchingBin.display_label || matchingBin.binnumber) + ')');
+        } else {
+          self.toBin(matchingBin.binnumber);
+          self.restockBin(matchingBin.binnumber);
+          if (self.soundEnabled()) scannerAudio.playSuccess();
+          self.flashSuccess(true);
+          setTimeout(function() { self.flashSuccess(false); }, 350);
+          self.feedbackType('info');
+          self.feedbackMessage('📍 Target location set to: ' + (matchingBin.display_label || matchingBin.binnumber));
+        }
+      } else {
+        // Location scanned before an item: prime destination & highlight bin
+        self.toBin(matchingBin.binnumber);
+        self.restockBin(matchingBin.binnumber);
+        self.getBinOpenState(matchingBin.binnumber)(true);
+        if (self.soundEnabled()) scannerAudio.playSuccess();
+        self.flashSuccess(true);
+        setTimeout(function() { self.flashSuccess(false); }, 350);
+        self.feedbackType('info');
+        self.feedbackMessage('📍 Location ready: ' + (matchingBin.display_label || matchingBin.binnumber) + '. Now scan an item barcode!');
+      }
+      return;
+    }
+
     self.isProcessing(true);
     self.feedbackMessage('');
     self.unknownBarcodeScanned(null);
@@ -381,6 +484,35 @@ function ScannerViewModel() {
       const res = await fetch('/api/scanner/lookup?barcode=' + encodeURIComponent(rawBarcode));
       const data = await res.json();
       const latency = Date.now() - start;
+
+      // Handle server-identified bin/location barcode
+      if (data.success && data.isBin && data.bin) {
+        const bin = data.bin;
+        if (self.selectedItem()) {
+          if (bin.binnumber === self.fromBin()) {
+            self.feedbackType('error');
+            self.feedbackMessage('⚠ Destination cannot be the same as source (' + (bin.display_label || bin.binnumber) + ')');
+          } else {
+            self.toBin(bin.binnumber);
+            self.restockBin(bin.binnumber);
+            if (self.soundEnabled()) scannerAudio.playSuccess();
+            self.flashSuccess(true);
+            setTimeout(function() { self.flashSuccess(false); }, 350);
+            self.feedbackType('info');
+            self.feedbackMessage('📍 Target location set to: ' + (bin.display_label || bin.binnumber));
+          }
+        } else {
+          self.toBin(bin.binnumber);
+          self.restockBin(bin.binnumber);
+          self.getBinOpenState(bin.binnumber)(true);
+          if (self.soundEnabled()) scannerAudio.playSuccess();
+          self.flashSuccess(true);
+          setTimeout(function() { self.flashSuccess(false); }, 350);
+          self.feedbackType('info');
+          self.feedbackMessage('📍 Location ready: ' + (bin.display_label || bin.binnumber) + '. Now scan an item barcode!');
+        }
+        return;
+      }
 
       if (data.success && data.data) {
         if (self.soundEnabled()) scannerAudio.playSuccess();
@@ -397,13 +529,15 @@ function ScannerViewModel() {
         // Pre-select first available bin with stock
         if (itemObj.bins.length > 0) {
           self.fromBin(itemObj.bins[0].bin_id);
+          self.restockBin(itemObj.bins[0].bin_id);
           const other = self.allWarehouseBinsData().find(function (b) {
             return b.binnumber !== itemObj.bins[0].bin_id;
           });
           if (other) self.toBin(other.binnumber);
         } else {
           self.fromBin('');
-          self.toBin('');
+          self.toBin(self.allWarehouseBinsData().length > 0 ? self.allWarehouseBinsData()[0].binnumber : '');
+          self.restockBin(self.allWarehouseBinsData().length > 0 ? self.allWarehouseBinsData()[0].binnumber : '');
         }
 
         self.feedbackType('success');
@@ -418,6 +552,26 @@ function ScannerViewModel() {
           latency: latency
         });
 
+      } else if (data.autoDiscovered && data.product) {
+        if (self.soundEnabled()) scannerAudio.playSuccess();
+        self.feedbackType('success');
+        self.feedbackMessage('✨ Discovered via Open Food Facts: ' + data.product.displayName);
+        self.openAddItemModal();
+        self.registerForm.upc(data.product.upc);
+        self.registerForm.displayname(data.product.displayName);
+        self.registerForm.notes(data.product.brand ? 'Brand: ' + data.product.brand : '');
+        if (data.product.imageUrl) {
+          self.registerForm.previewUrl(data.product.imageUrl);
+        }
+        self.showRegisterModal(true);
+
+        self.logTelemetry({
+          badge: 'OPEN-FOOD-FACTS',
+          badgeClass: 'badge-cache',
+          title: 'Auto-Discovered: ' + data.product.displayName,
+          message: 'Found on Open Food Facts for UPC ' + data.product.upc,
+          latency: latency
+        });
       } else {
         if (self.soundEnabled()) scannerAudio.playError();
         self.flashError(true);
@@ -611,6 +765,53 @@ function ScannerViewModel() {
       self.feedbackMessage('✕ NetSuite connection failed: ' + err.message);
     } finally {
       self.isTransferring(false);
+    }
+  };
+
+  // --- Commit Restock (Add Stock into Location) ---
+  self.commitRestock = async function() {
+    const item = self.selectedItem();
+    if (!item) return;
+    const binId = self.restockBin();
+    const qty = Number(self.restockQty()) || 1;
+    if (!binId || qty <= 0) return;
+
+    self.isRestocking(true);
+    const start = Date.now();
+    try {
+      const res = await fetch('/api/scanner/items/' + (item.itemId || item.itemid) + '/stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ binId: binId, qty: qty })
+      });
+      const data = await res.json();
+      const latency = Date.now() - start;
+
+      if (data.success) {
+        if (self.soundEnabled()) scannerAudio.playSuccess();
+        self.flashSuccess(true);
+        setTimeout(function() { self.flashSuccess(false); }, 500);
+
+        self.feedbackType('success');
+        self.feedbackMessage('✓ Added +' + qty + ' units into ' + binId);
+
+        self.logTelemetry({
+          badge: 'RESTOCK',
+          badgeClass: 'badge-erp',
+          title: 'Stock Added: +' + qty + 'x ' + (item.displayName || item.sku),
+          message: 'Location: ' + binId + ' | Balances updated',
+          latency: latency
+        });
+
+        await self.refreshInventory();
+        await self.executeBarcodeLookup(item.upc || item.sku);
+      } else {
+        alert('Could not add stock: ' + data.error);
+      }
+    } catch (e) {
+      alert('Network error: ' + e.message);
+    } finally {
+      self.isRestocking(false);
     }
   };
 

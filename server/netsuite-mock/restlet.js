@@ -71,6 +71,8 @@ async function get(context) {
         totalQty: itemData.total_qty,
         image_url: itemData.image_url || null,
         notes: itemData.notes || null,
+        default_bin_id: itemData.default_bin_id || null,
+        store: itemData.store || null,
         bins: (itemData.bins || []).map(b => ({
           ...b,
           display_label: b.display_label || b.bin_id

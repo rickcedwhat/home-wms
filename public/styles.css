@@ -696,6 +696,44 @@ body {
   color: var(--amber);
 }
 
+/* Active Item Workflow Tabs */
+.item-workflow-tabs {
+  display: flex;
+  gap: 0.4rem;
+  background: #0d1219;
+  padding: 0.25rem;
+  border-radius: 8px;
+  border: 1px solid #1e293b;
+}
+
+.workflow-tab-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.45rem 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  transition: all 0.15s;
+}
+
+.workflow-tab-btn:hover {
+  color: #fff;
+  background: #182232;
+}
+
+.workflow-tab-btn.active {
+  background: var(--blue);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
 /* Transfer Form */
 .transfer-form-panel {
   background: #131923;
@@ -826,6 +864,16 @@ body {
   cursor: not-allowed;
   background: #334155;
   color: #64748b;
+}
+
+.btn-commit.btn-commit-restock {
+  background: #0284c7;
+  color: #fff;
+}
+
+.btn-commit.btn-commit-restock:hover:not(:disabled) {
+  background: #0369a1;
+  color: #fff;
 }
 
 /* Idle State */

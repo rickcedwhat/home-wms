@@ -86,7 +86,21 @@ function initSchema(db) {
       created_at TEXT NOT NULL,
       signed_by_tba TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS shopping_list (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      item_id TEXT NOT NULL,
+      needed_qty INTEGER DEFAULT 1,
+      store TEXT,
+      status TEXT DEFAULT 'PENDING',
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (item_id) REFERENCES items(itemid) ON DELETE CASCADE
+    );
   `);
+
+  // Run non-destructive column migrations for existing databases
+  try { db.exec('ALTER TABLE items ADD COLUMN default_bin_id TEXT;'); } catch (_) {}
+  try { db.exec('ALTER TABLE items ADD COLUMN store TEXT;'); } catch (_) {}
 }
 
 function seedInitialData(db) {
@@ -116,8 +130,10 @@ function seedInitialData(db) {
 
   // Kitchen Bins (for household scanning prototype)
   const kitchenBins = [
-    ['PANTRY',       'Kitchen', 'Dry Storage',      'HOME-KITCHEN', '🥫 Pantry',         'BIN-PANTRY'],
-    ['FRIDGE-DOOR',  'Kitchen', 'Refrigerator',     'HOME-KITCHEN', '🧊 Fridge (Door)',   'BIN-FRIDGE-DOOR'],
+    ['PANTRY',        'Kitchen', 'Dry Storage',      'HOME-KITCHEN', '🥫 Pantry (Main)',   'BIN-PANTRY'],
+    ['PANTRY-TOP',    'Kitchen', 'Pantry Top Door',  'HOME-KITCHEN', '🚪 Pantry Top',      'BIN-PANTRY-TOP'],
+    ['PANTRY-BOTTOM', 'Kitchen', 'Pantry Bottom Door','HOME-KITCHEN', '🚪 Pantry Bottom',   'BIN-PANTRY-BOTTOM'],
+    ['FRIDGE-DOOR',   'Kitchen', 'Refrigerator',     'HOME-KITCHEN', '🧊 Fridge (Door)',   'BIN-FRIDGE-DOOR'],
     ['FRIDGE-SHELF', 'Kitchen', 'Refrigerator',     'HOME-KITCHEN', '🥗 Fridge (Shelf)',  'BIN-FRIDGE-SHELF'],
     ['FREEZER',      'Kitchen', 'Freezer',          'HOME-KITCHEN', '❄️ Freezer',          'BIN-FREEZER'],
     ['COUNTER',      'Kitchen', 'Counter Top',      'HOME-KITCHEN', '🍳 Kitchen Counter', 'BIN-COUNTER'],
