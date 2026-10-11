@@ -1,0 +1,2145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Kitchen Scanner — Mobile Terminal</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    :root {
+      --bg: #0b0f17;
+      --card-bg: #141b26;
+      --card-border: #243144;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --green: #10b981;
+      --green-dark: #059669;
+      --amber: #f59e0b;
+      --red: #ef4444;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      min-height: -webkit-fill-available;
+      padding: env(safe-area-inset-top, 0.5rem) 0.75rem env(safe-area-inset-bottom, 1rem) 0.75rem;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Bar */
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.6rem 0.25rem;
+      border-bottom: 1px solid #1a2332;
+      margin-bottom: 0.75rem;
+    }
+
+    .brand-title {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+
+    .btn-top {
+      background: #1a2433;
+      border: 1px solid #2e3e56;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.35rem 0.6rem;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .btn-top.active {
+      color: var(--green);
+      border-color: var(--green);
+    }
+
+    /* Mode Bar & Store Selector */
+    .mode-bar {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+      background: #101622;
+      border: 1px solid #1f2b3e;
+      border-radius: 10px;
+      padding: 0.5rem 0.6rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .mode-pills {
+      display: flex;
+      gap: 0.35rem;
+    }
+
+    .mode-pill {
+      flex: 1;
+      background: #182232;
+      border: 1px solid #28374d;
+      color: #94a3b8;
+      font-size: 0.78rem;
+      font-weight: 700;
+      padding: 0.55rem 0.2rem;
+      border-radius: 7px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+
+    .mode-pill.active.intake {
+      background: #059669;
+      border-color: #10b981;
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+    }
+
+    .mode-pill.active.dispose {
+      background: #dc2626;
+      border-color: #ef4444;
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+    }
+
+    .mode-pill.active.move {
+      background: #2563eb;
+      border-color: #3b82f6;
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    }
+
+    .mode-sub-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      color: #94a3b8;
+      padding: 0 0.15rem;
+    }
+
+    .store-select-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .store-select-dropdown {
+      background: #0a0f17;
+      border: 1px solid #253347;
+      color: #f1f5f9;
+      font-size: 1rem;
+      font-weight: 700;
+      padding: 0.25rem 0.45rem;
+      border-radius: 6px;
+      outline: none;
+    }
+
+    .mode-desc-pill {
+      font-size: 0.68rem;
+      color: #64748b;
+      font-weight: 600;
+      text-align: right;
+    }
+
+    .shopping-item-card {
+      background: #0c121c;
+      border: 1px solid #202b3c;
+      border-radius: 8px;
+      padding: 0.65rem 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.6rem;
+    }
+
+    .shopping-item-left {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .shopping-item-img {
+      width: 42px;
+      height: 42px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: #141b26;
+      border: 1px solid #2e3e56;
+      flex-shrink: 0;
+    }
+
+    .shopping-item-info {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .shopping-item-name {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .shopping-item-meta {
+      font-size: 0.7rem;
+      color: #64748b;
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+      margin-top: 0.15rem;
+    }
+
+    .shopping-store-tag {
+      background: rgba(245, 158, 11, 0.15);
+      color: #f59e0b;
+      padding: 0.1rem 0.35rem;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 0.65rem;
+    }
+
+    .shopping-item-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      flex-shrink: 0;
+    }
+
+    .btn-shop-restock {
+      background: #059669;
+      border: none;
+      color: #fff;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 0.35rem 0.6rem;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .btn-shop-del {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      font-size: 0.72rem;
+      padding: 0.35rem 0.5rem;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    /* Feedback Banner */
+    .feedback-banner {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #fff;
+      padding: 0.6rem 0.75rem;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s;
+    }
+
+    .feedback-banner.success {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: var(--green);
+      color: #34d399;
+    }
+
+    .feedback-banner.error {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: var(--red);
+      color: #f87171;
+    }
+
+    .feedback-banner.info {
+      background: rgba(59, 130, 246, 0.15);
+      border-color: var(--primary);
+      color: #93c5fd;
+    }
+
+    /* Scanner Viewfinder Box (Persistent Camera) */
+    .viewfinder-card {
+      background: #000;
+      border: 2px solid #2a3749;
+      border-radius: 12px;
+      position: relative;
+      overflow: hidden;
+      min-height: 200px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+      transition: border-color 0.2s;
+    }
+
+    .viewfinder-card.scanning {
+      border-color: var(--green);
+    }
+
+    .viewfinder-card video {
+      width: 100%;
+      height: 220px;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* Reticle & Laser */
+    .reticle-box {
+      position: absolute;
+      top: 15%;
+      left: 10%;
+      right: 10%;
+      bottom: 15%;
+      border: 2px dashed var(--amber);
+      border-radius: 10px;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .laser-line {
+      width: 100%;
+      height: 2px;
+      background: var(--red);
+      box-shadow: 0 0 8px var(--red);
+      position: absolute;
+      top: 0;
+      animation: laserSweep 1.6s ease-in-out infinite alternate;
+    }
+
+    @keyframes laserSweep {
+      from { top: 5%; }
+      to { top: 95%; }
+    }
+
+    .camera-idle-prompt {
+      padding: 1.5rem 1rem;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .camera-idle-prompt .idle-icon {
+      font-size: 2.2rem;
+    }
+
+    .camera-idle-prompt h4 {
+      font-size: 0.95rem;
+      color: #fff;
+    }
+
+    .camera-idle-prompt p {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      max-width: 260px;
+    }
+
+    /* Scan Controls Row */
+    .scan-controls-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .btn-cam-main {
+      flex: 1;
+      background: var(--primary);
+      color: #fff;
+      font-size: 0.85rem;
+      font-weight: 700;
+      padding: 0.65rem 0.5rem;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      transition: background 0.15s;
+    }
+
+    .btn-cam-main.active {
+      background: #dc2626;
+    }
+
+    .btn-cam-snap {
+      flex: 1;
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #93c5fd;
+      font-size: 0.85rem;
+      font-weight: 700;
+      padding: 0.65rem 0.5rem;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      text-align: center;
+    }
+
+    .btn-cam-snap input[type="file"] {
+      display: none;
+    }
+
+    /* Viewfinder Overlays */
+    .viewfinder-badge {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: rgba(0, 0, 0, 0.75);
+      border: 1px solid #334155;
+      color: var(--green);
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 0.2rem 0.55rem;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      z-index: 5;
+    }
+
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      background: var(--green);
+      border-radius: 50%;
+      animation: pulseDot 1s infinite;
+    }
+
+    @keyframes pulseDot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .viewfinder-wake-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(0, 0, 0, 0.75);
+      border: 1px solid #475569;
+      color: #fff;
+      font-size: 0.68rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+      cursor: pointer;
+      z-index: 5;
+    }
+
+    /* Manual barcode bar (Collapsible or subtle) */
+    .manual-scan-box {
+      display: flex;
+      gap: 0.4rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .manual-input {
+      flex: 1;
+      background: #111722;
+      border: 1px solid #222e40;
+      color: #fff;
+      padding: 0.5rem 0.75rem;
+      border-radius: 7px;
+      font-size: 1rem;
+      outline: none;
+    }
+
+    .manual-input:focus {
+      border-color: var(--primary);
+    }
+
+    .btn-manual-scan {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #fff;
+      font-size: 0.8rem;
+      font-weight: 700;
+      padding: 0 0.85rem;
+      border-radius: 7px;
+      cursor: pointer;
+    }
+
+    /* Active Item Card */
+    .active-card {
+      background: var(--card-bg);
+      border: 1.5px solid var(--card-border);
+      border-radius: 14px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .item-row-top {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .item-photo {
+      width: 60px;
+      height: 60px;
+      border-radius: 8px;
+      object-fit: cover;
+      background: #0b0f17;
+      border: 1px solid #2e3e56;
+      flex-shrink: 0;
+    }
+
+    .item-photo-placeholder {
+      width: 60px;
+      height: 60px;
+      border-radius: 8px;
+      background: #0b0f17;
+      border: 1px solid #2e3e56;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8rem;
+      flex-shrink: 0;
+    }
+
+    .item-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .item-title {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1.25;
+      margin-bottom: 0.2rem;
+    }
+
+    .item-subcode {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      font-family: monospace;
+    }
+
+    /* Current Location Box */
+    .location-box {
+      background: #0c121c;
+      border: 1px solid #202b3c;
+      border-radius: 8px;
+      padding: 0.65rem 0.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .loc-label {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      font-weight: 700;
+      display: block;
+      margin-bottom: 0.15rem;
+    }
+
+    .loc-val {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .loc-stock {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--green);
+      background: rgba(16, 185, 129, 0.15);
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+    }
+
+    /* Workflow Tabs */
+    .card-tabs {
+      display: flex;
+      gap: 0.4rem;
+      background: #090e17;
+      padding: 0.25rem;
+      border-radius: 8px;
+      border: 1px solid #1a2433;
+    }
+
+    .tab-btn {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-size: 0.78rem;
+      font-weight: 700;
+      padding: 0.5rem;
+      border-radius: 6px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+
+    .tab-btn.active {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    /* Action Form */
+    .form-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .field-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .select-friendly {
+      width: 100%;
+      background: #0c121c;
+      border: 1.5px solid #2b394e;
+      color: #fff;
+      padding: 0.65rem 0.75rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      outline: none;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right 0.75rem center;
+      background-size: 1rem;
+    }
+
+    .select-friendly:focus {
+      border-color: var(--primary);
+    }
+
+    .stepper-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .btn-step {
+      width: 44px;
+      height: 44px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #fff;
+      font-size: 1.25rem;
+      font-weight: 700;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .stepper-input {
+      flex: 1;
+      height: 44px;
+      background: #0c121c;
+      border: 1.5px solid #2b394e;
+      color: #fff;
+      font-size: 1.1rem;
+      font-weight: 800;
+      text-align: center;
+      border-radius: 8px;
+      outline: none;
+    }
+
+    .btn-action-commit {
+      width: 100%;
+      background: var(--green);
+      color: #000;
+      border: none;
+      padding: 0.85rem;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-top: 0.25rem;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+      transition: background 0.15s;
+    }
+
+    .btn-action-commit:disabled {
+      opacity: 0.4;
+      background: #334155;
+      color: #64748b;
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+
+    .btn-action-restock {
+      background: #0284c7;
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(2, 132, 199, 0.3);
+    }
+
+    .btn-dismiss-item {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.4rem;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    /* Modal / Bottom Drawer for Registering Unknown Item */
+    .drawer-backdrop {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      z-index: 100;
+      display: none;
+    }
+
+    .drawer-backdrop.open { display: block; }
+
+    .drawer-card {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      background: #141b26;
+      border-top: 2px solid var(--primary);
+      border-radius: 16px 16px 0 0;
+      padding: 1.25rem;
+      z-index: 101;
+      max-height: 85vh;
+      overflow-y: auto;
+      display: none;
+      flex-direction: column;
+      gap: 0.85rem;
+      box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.6);
+    }
+
+    .drawer-card.open { display: flex; }
+
+    .drawer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .drawer-header h3 {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .drawer-close {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 1.2rem;
+      cursor: pointer;
+    }
+
+    .drawer-input {
+      width: 100%;
+      background: #0b0f17;
+      border: 1px solid #2b394e;
+      color: #fff;
+      padding: 0.65rem 0.75rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      outline: none;
+    }
+
+    .btn-drawer-submit {
+      width: 100%;
+      background: var(--green);
+      color: #000;
+      border: none;
+      padding: 0.85rem;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      cursor: pointer;
+      margin-top: 0.5rem;
+    }
+
+    .photo-pick-box {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .photo-preview {
+      width: 50px;
+      height: 50px;
+      border-radius: 6px;
+      object-fit: cover;
+      border: 1px solid #334155;
+      display: none;
+    }
+
+    .btn-pick-photo {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #93c5fd;
+      padding: 0.5rem 0.85rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-pick-photo input { display: none; }
+
+    /* Footer link to desktop simulation */
+    .mobile-footer {
+      margin-top: auto;
+      padding-top: 1.5rem;
+      text-align: center;
+      font-size: 0.72rem;
+      color: var(--text-dim);
+    }
+
+    .mobile-footer a {
+      color: #64748b;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <header class="top-bar">
+    <div class="brand-title">
+      <span>📱 Kitchen Scanner</span>
+    </div>
+    <div class="top-actions">
+      <button class="btn-top" id="btnSound" onclick="toggleSound()">🔊 Sound</button>
+      <button class="btn-top" id="btnShoppingList" onclick="openShoppingDrawer()">📋 List (<span id="shoppingCount">0</span>)</button>
+      <button class="btn-top" onclick="openRegisterDrawer()">＋ Register</button>
+    </div>
+  </header>
+
+  <!-- Status / Feedback Toast -->
+  <div class="feedback-banner info" id="statusBanner">
+    <span id="statusIcon">ℹ</span>
+    <span id="statusText">Point camera at any item or door barcode</span>
+  </div>
+
+  <!-- Scan Mode & Store Selector Bar -->
+  <div class="mode-bar">
+    <div class="mode-pills">
+      <button class="mode-pill active intake" id="pillIntake" onclick="setScanMode('INTAKE')">🛒 INTAKE (+1)</button>
+      <button class="mode-pill" id="pillDispose" onclick="setScanMode('DISPOSE')">🗑 DISPOSE (-1)</button>
+      <button class="mode-pill" id="pillMove" onclick="setScanMode('MOVE')">📦 MOVE</button>
+    </div>
+    <div class="mode-sub-row">
+      <div class="store-select-wrap">
+        <span>Store:</span>
+        <select class="store-select-dropdown" id="activeStoreSelect" onchange="setActiveStore(this.value)">
+          <option value="Aldi">Aldi</option>
+          <option value="Walmart">Walmart</option>
+          <option value="Trader Joe's">Trader Joe's</option>
+          <option value="Costco">Costco</option>
+          <option value="Target">Target</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="mode-desc-pill" id="modeDescText">Auto-adds +1 into default bin</div>
+    </div>
+  </div>
+
+  <!-- Persistent Camera Viewfinder -->
+  <div class="viewfinder-card" id="viewfinderCard">
+    <div class="viewfinder-badge" id="cameraLiveBadge" style="display:none;">
+      <span class="live-dot"></span>
+      <span>CAMERA LIVE</span>
+    </div>
+    <button class="viewfinder-wake-btn" id="btnWakeCam" style="display:none;" onclick="wakeCamera()">🔄 Refresh Video</button>
+
+    <!-- Active Video Stream -->
+    <video id="mobileVideo" playsinline autoplay muted style="display:none;"></video>
+
+    <!-- Scan Reticle -->
+    <div class="reticle-box" id="reticleBox" style="display:none;">
+      <div class="laser-line"></div>
+    </div>
+
+    <!-- Idle Prompt (when camera is off) -->
+    <div class="camera-idle-prompt" id="cameraIdlePrompt">
+      <span class="idle-icon">📷</span>
+      <h4>Live Camera Idle</h4>
+      <p>Tap "Live Camera" below to scan barcodes continuously without closing the feed.</p>
+    </div>
+  </div>
+
+  <!-- Scan Action Buttons -->
+  <div class="scan-controls-row">
+    <button class="btn-cam-main" id="btnCamToggle" onclick="toggleCamera()">
+      <span id="camToggleIcon">📷</span>
+      <span id="camToggleText">Live Camera</span>
+    </button>
+    <label class="btn-cam-snap" title="Take a single photo to scan">
+      <span>📸 Snap Photo</span>
+      <input type="file" accept="image/*" capture="environment" onchange="handlePhotoSnap(event)">
+    </label>
+  </div>
+
+  <!-- Quick Manual / Bluetooth Scanner Input -->
+  <div class="manual-scan-box">
+    <input type="text" class="manual-input" id="manualInput" placeholder="Scan or type barcode / door..." autocomplete="off" onkeyup="if(event.key==='Enter') submitManualScan()">
+    <button class="btn-manual-scan" onclick="submitManualScan()">Go</button>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- ACTIVE ITEM CARD (Appears when item is scanned)               -->
+  <!-- ============================================================== -->
+  <div class="active-card" id="activeItemCard" style="display:none;">
+    
+    <!-- Item Header -->
+    <div class="item-row-top">
+      <img class="item-photo" id="itemPhoto" src="" alt="Item Photo" style="display:none;">
+      <div class="item-photo-placeholder" id="itemEmoji">📦</div>
+      <div class="item-info">
+        <h3 class="item-title" id="itemDisplayName">Item Name</h3>
+        <span class="item-subcode" id="itemUpc">UPC: 000000000000</span>
+      </div>
+    </div>
+
+    <!-- Current Location & Stock -->
+    <div class="location-box">
+      <div>
+        <span class="loc-label">CURRENT LOCATION</span>
+        <div class="loc-val" id="itemCurrentBinLabel">🚪 Pantry Bottom</div>
+      </div>
+      <span class="loc-stock" id="itemStockBadge">1 on hand</span>
+    </div>
+
+    <!-- Tabs: Move vs Restock -->
+    <div class="card-tabs">
+      <button class="tab-btn active" id="tabMove" onclick="switchMode('move')">📦 Move Location</button>
+      <button class="tab-btn" id="tabRestock" onclick="switchMode('restock')">＋ Add Stock</button>
+    </div>
+
+    <!-- FORM 1: Move Location -->
+    <div class="form-panel" id="panelMove">
+      <div class="field-group">
+        <span class="field-label">MOVE TO (DESTINATION)</span>
+        <select class="select-friendly" id="destSelect"></select>
+      </div>
+
+      <div class="field-group">
+        <span class="field-label">QUANTITY TO MOVE</span>
+        <div class="stepper-row">
+          <button class="btn-step" onclick="adjustQty(-1)">&minus;</button>
+          <input type="number" class="stepper-input" id="moveQtyInput" value="1" min="1">
+          <button class="btn-step" onclick="adjustQty(1)">+</button>
+        </div>
+      </div>
+
+      <button class="btn-action-commit" id="btnCommitMove" onclick="commitMove()">
+        <span>✓ MOVE TO LOCATION</span>
+      </button>
+    </div>
+
+    <!-- FORM 2: Restock Stock -->
+    <div class="form-panel" id="panelRestock" style="display:none;">
+      <div class="field-group">
+        <span class="field-label">RESTOCK INTO LOCATION</span>
+        <select class="select-friendly" id="restockSelect"></select>
+      </div>
+
+      <div class="field-group">
+        <span class="field-label">QUANTITY TO ADD</span>
+        <div class="stepper-row">
+          <button class="btn-step" onclick="adjustRestockQty(-1)">&minus;</button>
+          <input type="number" class="stepper-input" id="restockQtyInput" value="1" min="1">
+          <button class="btn-step" onclick="adjustRestockQty(1)">+</button>
+        </div>
+      </div>
+
+      <button class="btn-action-commit btn-action-restock" id="btnCommitRestock" onclick="commitRestock()">
+        <span>＋ ADD STOCK TO LOCATION</span>
+      </button>
+    </div>
+
+    <button class="btn-dismiss-item" onclick="dismissActiveItem()">✕ Clear / Done with this item</button>
+  </div>
+
+  <!-- Bottom Drawer: Register Unknown Item -->
+  <div class="drawer-backdrop" id="drawerBackdrop" onclick="closeRegisterDrawer()"></div>
+  <div class="drawer-card" id="drawerCard">
+    <div class="drawer-header">
+      <h3>＋ Register New Item</h3>
+      <button class="drawer-close" onclick="closeRegisterDrawer()">✕</button>
+    </div>
+
+    <div class="field-group">
+      <span class="field-label">SCANNED BARCODE / UPC</span>
+      <input type="text" class="drawer-input font-mono" id="regUpc" placeholder="Barcode number">
+    </div>
+
+    <div class="field-group">
+      <span class="field-label">ITEM NAME *</span>
+      <input type="text" class="drawer-input" id="regName" placeholder="e.g. Nido Powdered Milk, Olive Oil...">
+    </div>
+
+    <div class="field-group">
+      <span class="field-label">STORE IN LOCATION *</span>
+      <select class="select-friendly" id="regLocationSelect"></select>
+    </div>
+
+    <div class="field-group">
+      <span class="field-label">STARTING QUANTITY</span>
+      <input type="number" class="drawer-input" id="regQty" value="1" min="1">
+    </div>
+
+    <div class="field-group">
+      <span class="field-label">PHOTO (OPTIONAL)</span>
+      <div class="photo-pick-box">
+        <img class="photo-preview" id="regPhotoPreview" src="">
+        <label class="btn-pick-photo">
+          <span id="photoPickText">📷 Take / Pick Photo</span>
+          <input type="file" accept="image/*" capture="environment" onchange="handleRegPhoto(event)">
+        </label>
+      </div>
+    </div>
+
+    <button class="btn-drawer-submit" onclick="submitRegisterItem()">✓ Save & Add Item</button>
+  </div>
+
+  <!-- Bottom Drawer: Auto-Discovered Product (Open Food Facts) -->
+  <div class="drawer-backdrop" id="discoverBackdrop" onclick="closeDiscoverDrawer()"></div>
+  <div class="drawer-card" id="discoverCard">
+    <div class="drawer-header">
+      <div>
+        <span style="font-size: 0.72rem; color: #10b981; font-weight: 800; text-transform: uppercase;">✨ Open Food Facts Auto-Discovered</span>
+        <h3 id="discoverTitle" style="margin-top: 0.15rem; color: #fff;">Product Name</h3>
+      </div>
+      <button class="drawer-close" onclick="closeDiscoverDrawer()">✕</button>
+    </div>
+
+    <div style="display: flex; gap: 0.75rem; align-items: center; background: #0c121c; padding: 0.75rem; border-radius: 8px; border: 1px solid #202b3c;">
+      <img id="discoverImg" src="" alt="Product" style="width: 54px; height: 54px; object-fit: contain; border-radius: 6px; background: #fff; display: none;">
+      <div id="discoverEmoji" style="width: 54px; height: 54px; border-radius: 6px; background: #111722; display: flex; align-items: center; justify-content: center; font-size: 1.8rem;">🥫</div>
+      <div style="flex: 1; min-width: 0;">
+        <div id="discoverBrand" style="font-size: 0.8rem; color: #94a3b8; font-weight: 700;">Brand</div>
+        <div id="discoverBarcode" style="font-size: 0.72rem; color: #64748b; font-family: monospace;">UPC: 0000000000</div>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <span class="field-label">DEFAULT LOCATION (WHERE DOES THIS LIVE?) *</span>
+      <select class="select-friendly" id="discoverLocationSelect"></select>
+    </div>
+
+    <div class="field-group">
+      <span class="field-label">STORE / VENDOR</span>
+      <select class="select-friendly" id="discoverStoreSelect">
+        <option value="Aldi">Aldi</option>
+        <option value="Walmart">Walmart</option>
+        <option value="Trader Joe's">Trader Joe's</option>
+        <option value="Costco">Costco</option>
+        <option value="Target">Target</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+
+    <button class="btn-drawer-submit" id="btnConfirmDiscover" onclick="confirmDiscoverItem()">
+      ✓ Save Default & Intake (+1)
+    </button>
+  </div>
+
+  <!-- Bottom Drawer: Depleted Shopping List -->
+  <div class="drawer-backdrop" id="shoppingBackdrop" onclick="closeShoppingDrawer()"></div>
+  <div class="drawer-card" id="shoppingCard">
+    <div class="drawer-header">
+      <div>
+        <h3 style="display: flex; align-items: center; gap: 0.4rem; color: #fff;">📋 Shopping List</h3>
+        <span style="font-size: 0.72rem; color: var(--text-dim);">Items auto-added when stock reached 0</span>
+      </div>
+      <button class="drawer-close" onclick="closeShoppingDrawer()">✕</button>
+    </div>
+
+    <div id="shoppingListContainer" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 48vh; overflow-y: auto; margin-top: 0.25rem;">
+      <!-- Populated dynamically -->
+    </div>
+
+    <div style="display: flex; gap: 0.5rem; margin-top: 0.6rem;">
+      <button class="btn-top" style="flex: 1; padding: 0.7rem; border-color: #ef4444; color: #f87171;" onclick="clearAllShoppingList()">Clear All</button>
+      <button class="btn-top" style="flex: 1; padding: 0.7rem;" onclick="closeShoppingDrawer()">Done</button>
+    </div>
+  </div>
+
+  <footer class="mobile-footer">
+    <a href="/desktop">Switch to Full Desktop Warehouse Simulation</a>
+  </footer>
+
+  <!-- ZXing library for real-time barcode decoding -->
+  <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+
+  <script>
+    // --- Audio Feedback Engine with iOS Gesture Unlock ---
+    class ScannerAudio {
+      constructor() {
+        this.ctx = null;
+        this.unlocked = false;
+        this.fallbackAudio = new Audio("data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU"+Array(200).join("1234"));
+      }
+
+      unlock() {
+        if (this.unlocked) return;
+        try {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) {
+            this.ctx = new AudioContext();
+            if (this.ctx.state === 'suspended') {
+              this.ctx.resume();
+            }
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            gain.gain.value = 0.001;
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(0);
+            osc.stop(0.01);
+            this.unlocked = true;
+          }
+        } catch (_) {}
+      }
+
+      beep(freq, duration, type = 'sine') {
+        this.unlock();
+        if (navigator.vibrate) {
+          try { navigator.vibrate(80); } catch (_) {}
+        }
+        if (this.ctx && this.ctx.state === 'running') {
+          try {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+            gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start();
+            osc.stop(this.ctx.currentTime + duration);
+            return;
+          } catch (_) {}
+        }
+        try { this.fallbackAudio.play().catch(()=>{}); } catch (_) {}
+      }
+
+      success() {
+        this.beep(880, 0.1);
+        setTimeout(() => this.beep(1320, 0.15), 90);
+      }
+
+      error() {
+        this.beep(280, 0.25, 'sawtooth');
+      }
+    }
+
+    const audio = new ScannerAudio();
+    let soundEnabled = true;
+    ['touchstart', 'touchend', 'click'].forEach(evt => {
+      document.addEventListener(evt, () => audio.unlock(), { once: true });
+    });
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      const btn = document.getElementById('btnSound');
+      btn.textContent = soundEnabled ? '🔊 Sound' : '🔇 Muted';
+      btn.classList.toggle('active', soundEnabled);
+    }
+
+    // --- State Variables ---
+    let allBins = [];
+    let activeItem = null;
+    let currentMode = 'move'; // 'move' | 'restock' (within active item card)
+    let activeScanMode = 'INTAKE'; // 'INTAKE' | 'DISPOSE' | 'MOVE'
+    let activeStore = 'Aldi';
+    let discoveredProduct = null;
+    let isCameraActive = false;
+    let zxingReader = null;
+    let cameraStream = null;
+    let lastScannedCode = null;
+    let lastScanTime = 0;
+    const SCAN_DEBOUNCE_MS = 1800; // Keep camera open, ignore repeat reads for 1.8s
+    let regPhotoFile = null;
+
+    // Friendly kitchen order priority
+    const KITCHEN_SORT_ORDER = [
+      'PANTRY-BOTTOM',
+      'PANTRY-TOP',
+      'PANTRY',
+      'FRIDGE-DOOR',
+      'FRIDGE-SHELF',
+      'COUNTER',
+      'SPICE-RACK',
+      'FREEZER',
+      'CABINET-LOW',
+      'CABINET-HIGH'
+    ];
+
+    function setScanMode(mode) {
+      activeScanMode = mode;
+      const pillIntake = document.getElementById('pillIntake');
+      const pillDispose = document.getElementById('pillDispose');
+      const pillMove = document.getElementById('pillMove');
+      const descText = document.getElementById('modeDescText');
+
+      if (pillIntake) pillIntake.className = 'mode-pill' + (mode === 'INTAKE' ? ' active intake' : '');
+      if (pillDispose) pillDispose.className = 'mode-pill' + (mode === 'DISPOSE' ? ' active dispose' : '');
+      if (pillMove) pillMove.className = 'mode-pill' + (mode === 'MOVE' ? ' active move' : '');
+
+      if (mode === 'INTAKE') {
+        if (descText) descText.textContent = 'Auto-adds +1 into default bin';
+        showStatus('🛒 Mode: INTAKE — Scans auto-add +1 into default location', 'info');
+      } else if (mode === 'DISPOSE') {
+        if (descText) descText.textContent = 'Decrements -1 (depleted → shopping list)';
+        showStatus('🗑 Mode: DISPOSE — Scans decrement -1 (adds to list at 0)', 'info');
+      } else {
+        if (descText) descText.textContent = 'Scan item, then scan destination door';
+        showStatus('📦 Mode: MOVE — Move items between locations', 'info');
+      }
+      if (soundEnabled) audio.beep(600, 0.08);
+    }
+
+    function setActiveStore(store) {
+      activeStore = store;
+      const sel = document.getElementById('activeStoreSelect');
+      if (sel) sel.value = store;
+      showStatus(`🏬 Store set to ${store}`, 'info');
+      if (soundEnabled) audio.beep(750, 0.08);
+    }
+
+    // --- Init ---
+    async function init() {
+      await loadBins();
+      setupVisibilityHandler();
+      loadShoppingListCount();
+      setScanMode('INTAKE');
+    }
+
+    async function loadBins() {
+      try {
+        const res = await fetch('/api/scanner/bins');
+        const data = await res.json();
+        if (data.status === 'SUCCESS' && Array.isArray(data.data)) {
+          // Sort bins: Kitchen doors and pantry first
+          allBins = data.data.sort((a, b) => {
+            const idxA = KITCHEN_SORT_ORDER.indexOf(a.binnumber);
+            const idxB = KITCHEN_SORT_ORDER.indexOf(b.binnumber);
+            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+            if (idxA !== -1) return -1;
+            if (idxB !== -1) return 1;
+            return (a.display_label || a.binnumber).localeCompare(b.display_label || b.binnumber);
+          });
+          populateLocationSelects();
+        }
+      } catch (e) {
+        showStatus('Failed to load locations: ' + e.message, 'error');
+      }
+    }
+
+    function populateLocationSelects() {
+      const destSel = document.getElementById('destSelect');
+      const restockSel = document.getElementById('restockSelect');
+      const regSel = document.getElementById('regLocationSelect');
+
+      const makeOptions = (filterBinId = null) => {
+        return allBins
+          .filter(b => b.binnumber !== filterBinId)
+          .map(b => `<option value="${b.binnumber}">${getFriendlyBinName(b.binnumber)}</option>`)
+          .join('');
+      };
+
+      destSel.innerHTML = makeOptions(activeItem ? getActiveItemSourceBin() : null);
+      restockSel.innerHTML = makeOptions();
+      regSel.innerHTML = makeOptions();
+    }
+
+    function getFriendlyBinName(binId) {
+      const b = allBins.find(x => x.binnumber === binId);
+      if (b && b.display_label) return b.display_label;
+      if (binId === 'PANTRY-BOTTOM') return '🚪 Pantry Bottom';
+      if (binId === 'PANTRY-TOP') return '🚪 Pantry Top';
+      if (binId === 'PANTRY') return '🥫 Pantry (Main)';
+      if (binId === 'FRIDGE-DOOR') return '🧊 Fridge (Door)';
+      if (binId === 'FRIDGE-SHELF') return '🥗 Fridge (Shelf)';
+      if (binId === 'COUNTER') return '🍳 Kitchen Counter';
+      if (binId === 'SPICE-RACK') return '🧂 Spice Rack';
+      if (binId === 'FREEZER') return '❄️ Freezer';
+      return '📦 ' + binId;
+    }
+
+    function showStatus(msg, type = 'info') {
+      const banner = document.getElementById('statusBanner');
+      const text = document.getElementById('statusText');
+      const icon = document.getElementById('statusIcon');
+      text.textContent = msg;
+      banner.className = 'feedback-banner ' + type;
+      icon.textContent = type === 'success' ? '✓' : (type === 'error' ? '✕' : 'ℹ');
+    }
+
+    // --- Persistent Camera Engine ---
+    async function toggleCamera() {
+      if (isCameraActive) {
+        stopCamera();
+      } else {
+        await startCamera();
+      }
+    }
+
+    async function startCamera() {
+      audio.unlock();
+      const videoEl = document.getElementById('mobileVideo');
+      const prompt = document.getElementById('cameraIdlePrompt');
+      const reticle = document.getElementById('reticleBox');
+      const badge = document.getElementById('cameraLiveBadge');
+      const wakeBtn = document.getElementById('btnWakeCam');
+      const btn = document.getElementById('btnCamToggle');
+      const card = document.getElementById('viewfinderCard');
+
+      try {
+        isCameraActive = true;
+        prompt.style.display = 'none';
+        videoEl.style.display = 'block';
+        reticle.style.display = 'block';
+        badge.style.display = 'flex';
+        wakeBtn.style.display = 'block';
+        btn.classList.add('active');
+        card.classList.add('scanning');
+        document.getElementById('camToggleIcon').textContent = '⏹';
+        document.getElementById('camToggleText').textContent = 'Stop Camera';
+        showStatus('📷 Camera active — point at any item or door sticker', 'info');
+
+        if (window.ZXing && window.ZXing.BrowserMultiFormatReader) {
+          zxingReader = new window.ZXing.BrowserMultiFormatReader();
+          await zxingReader.decodeFromVideoDevice(null, 'mobileVideo', (result, err) => {
+            if (result && result.text) {
+              const code = result.text.trim();
+              const now = Date.now();
+              if (code && (code !== lastScannedCode || now - lastScanTime > SCAN_DEBOUNCE_MS)) {
+                lastScannedCode = code;
+                lastScanTime = now;
+                handleScannedBarcode(code);
+              }
+            }
+          });
+        } else if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+          videoEl.srcObject = cameraStream;
+        } else {
+          showStatus('Live video stream requires HTTPS. Use "Snap Photo" button.', 'error');
+          stopCamera();
+        }
+      } catch (err) {
+        console.error('Camera start error:', err);
+        stopCamera();
+        showStatus('Could not access camera: ' + err.message + '. Try "Snap Photo".', 'error');
+      }
+    }
+
+    function stopCamera() {
+      isCameraActive = false;
+      if (zxingReader) {
+        try { zxingReader.reset(); } catch (_) {}
+        zxingReader = null;
+      }
+      if (cameraStream) {
+        try { cameraStream.getTracks().forEach(t => t.stop()); } catch (_) {}
+        cameraStream = null;
+      }
+
+      document.getElementById('mobileVideo').style.display = 'none';
+      document.getElementById('cameraIdlePrompt').style.display = 'flex';
+      document.getElementById('reticleBox').style.display = 'none';
+      document.getElementById('cameraLiveBadge').style.display = 'none';
+      document.getElementById('btnWakeCam').style.display = 'none';
+      const btn = document.getElementById('btnCamToggle');
+      btn.classList.remove('active');
+      document.getElementById('viewfinderCard').classList.remove('scanning');
+      document.getElementById('camToggleIcon').textContent = '📷';
+      document.getElementById('camToggleText').textContent = 'Live Camera';
+    }
+
+    // Wake camera if iOS locked or paused video stream
+    function wakeCamera() {
+      const videoEl = document.getElementById('mobileVideo');
+      if (isCameraActive) {
+        try {
+          if (videoEl.paused) videoEl.play();
+        } catch (_) {}
+        // Restart reader decode loop if it stalled
+        if (zxingReader) {
+          try { zxingReader.reset(); } catch (_) {}
+          zxingReader.decodeFromVideoDevice(null, 'mobileVideo', (result, err) => {
+            if (result && result.text) {
+              const code = result.text.trim();
+              const now = Date.now();
+              if (code && (code !== lastScannedCode || now - lastScanTime > SCAN_DEBOUNCE_MS)) {
+                lastScannedCode = code;
+                lastScanTime = now;
+                handleScannedBarcode(code);
+              }
+            }
+          });
+        }
+        showStatus('🔄 Video refreshed', 'info');
+      }
+    }
+
+    function setupVisibilityHandler() {
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && isCameraActive) {
+          setTimeout(wakeCamera, 200);
+        }
+      });
+    }
+
+    // --- Photo Snap Barcode Scanner (Universal fallback) ---
+    async function handlePhotoSnap(event) {
+      audio.unlock();
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      showStatus('🔍 Reading barcode from photo...', 'info');
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = async function() {
+          const canvas = document.createElement('canvas');
+          const maxDim = 1200;
+          let w = img.width, h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+            else { w = Math.round((w * maxDim) / h); h = maxDim; }
+          }
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+
+          // Try native BarcodeDetector
+          if ('BarcodeDetector' in window) {
+            try {
+              const formats = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code'];
+              const detector = new BarcodeDetector({ formats });
+              const codes = await detector.detect(canvas);
+              if (codes && codes.length > 0) {
+                handleScannedBarcode(codes[0].rawValue);
+                return;
+              }
+            } catch (_) {}
+          }
+
+          // Fallback to ZXing canvas decode
+          if (window.ZXing && window.ZXing.BrowserMultiFormatReader) {
+            try {
+              const zx = new window.ZXing.BrowserMultiFormatReader();
+              const result = await zx.decodeFromImageElement(img);
+              if (result && result.text) {
+                handleScannedBarcode(result.text);
+                return;
+              }
+            } catch (_) {}
+          }
+
+          showStatus('No barcode detected in photo. Please ensure barcode is well-lit and in focus.', 'error');
+          if (soundEnabled) audio.error();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+      event.target.value = ''; // reset file input
+    }
+
+    function submitManualScan() {
+      const input = document.getElementById('manualInput');
+      const val = input.value.trim();
+      if (val) {
+        input.value = '';
+        input.blur();
+        handleScannedBarcode(val);
+      }
+    }
+
+    // --- Main Barcode Handling Flow ---
+    async function handleScannedBarcode(rawCode) {
+      const clean = rawCode.trim();
+
+      // 0. Intercept Command Barcodes (CMD:MODE:... or CMD:STORE:...)
+      if (clean.startsWith('CMD:')) {
+        const parts = clean.split(':');
+        const cat = (parts[1] || '').toUpperCase();
+        const act = (parts[2] || '').toUpperCase();
+        fetch('/api/scanner/lookup?barcode=' + encodeURIComponent(clean)).catch(()=>{});
+
+        if (cat === 'MODE') {
+          if (act === 'INTAKE') setScanMode('INTAKE');
+          else if (act === 'DISPOSE') setScanMode('DISPOSE');
+          else if (act === 'MOVE') setScanMode('MOVE');
+        } else if (cat === 'STORE') {
+          let storeName = 'Aldi';
+          if (act === 'WALMART') storeName = 'Walmart';
+          else if (act === 'TRADER_JOES') storeName = "Trader Joe's";
+          else if (act === 'COSTCO') storeName = 'Costco';
+          else if (act === 'TARGET') storeName = 'Target';
+          else if (act === 'ALDI') storeName = 'Aldi';
+          else storeName = act;
+          setActiveStore(storeName);
+        }
+        if (soundEnabled) audio.success();
+        return;
+      }
+
+      // 1. Is this a Location / Door barcode? (e.g. BIN-PANTRY-TOP, BIN-PANTRY-BOTTOM)
+      const cleanUpper = clean.toUpperCase().replace(/\s+/g, '');
+      const matchingBin = allBins.find(b => {
+        const bUpper = b.binnumber.toUpperCase();
+        const barcodeUpper = (b.barcode || '').toUpperCase();
+        return bUpper === cleanUpper || 
+               barcodeUpper === cleanUpper || 
+               ('BIN-' + bUpper) === cleanUpper ||
+               bUpper === cleanUpper.replace(/^BIN-/, '');
+      });
+
+      if (matchingBin) {
+        const binFriendly = getFriendlyBinName(matchingBin.binnumber);
+        if (soundEnabled) audio.success();
+
+        if (activeScanMode === 'MOVE') {
+          if (activeItem) {
+            const fromBinId = getActiveItemSourceBin();
+            if (fromBinId === matchingBin.binnumber) {
+              showStatus('ℹ ' + (activeItem.displayName || activeItem.displayname || 'Item') + ' is already stored in ' + binFriendly, 'info');
+            } else {
+              document.getElementById('destSelect').value = matchingBin.binnumber;
+              document.getElementById('restockSelect').value = matchingBin.binnumber;
+              showStatus('📍 Target location set to: ' + binFriendly + '. Tap Move below to confirm!', 'success');
+            }
+          } else {
+            document.getElementById('destSelect').value = matchingBin.binnumber;
+            document.getElementById('restockSelect').value = matchingBin.binnumber;
+            showStatus('📍 Door Scanned: ' + binFriendly + '. Now scan an item barcode to move it here!', 'info');
+          }
+        } else if (activeScanMode === 'INTAKE') {
+          showStatus(`📍 Scanned location: ${binFriendly}. (In Intake mode, scan grocery items to auto-add +1)`, 'info');
+        } else {
+          showStatus(`📍 Scanned location: ${binFriendly}. (In Disposal mode, scan grocery items to consume -1)`, 'info');
+        }
+        return;
+      }
+
+      // 2. Regular Item Barcode Scan (UPC, SKU)
+      showStatus('🔍 Processing: ' + clean + '...', 'info');
+      try {
+        const url = `/api/scanner/lookup?barcode=${encodeURIComponent(clean)}&mode=${encodeURIComponent(activeScanMode)}&store=${encodeURIComponent(activeStore)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        // 2a. Server detected command barcode
+        if (data.success && data.isCommand) {
+          if (data.category === 'MODE') setScanMode(data.action);
+          else if (data.category === 'STORE') setActiveStore(data.action);
+          if (soundEnabled) audio.success();
+          return;
+        }
+
+        // 2b. If server identifies this as a bin location
+        if (data.success && data.isBin && data.bin) {
+          const bin = data.bin;
+          const binFriendly = getFriendlyBinName(bin.binnumber);
+          if (soundEnabled) audio.success();
+          document.getElementById('destSelect').value = bin.binnumber;
+          document.getElementById('restockSelect').value = bin.binnumber;
+          showStatus('📍 Door Scanned: ' + binFriendly, 'info');
+          return;
+        }
+
+        // 2c. INTAKE mode instant result
+        if (data.success && data.mode === 'INTAKE' && data.autoIncremented) {
+          if (soundEnabled) audio.success();
+          const itemName = data.item?.displayname || data.item?.displayName || 'Item';
+          const locName = getFriendlyBinName(data.binId);
+          showStatus(`✓ [${data.store || activeStore}] +1 ${itemName} → ${locName} (${data.newTotal} on hand)`, 'success');
+          renderActiveItem(data.item);
+          return;
+        }
+
+        // 2d. DISPOSE mode instant result
+        if (data.success && data.mode === 'DISPOSE' && data.autoDecremented) {
+          if (soundEnabled) audio.success();
+          const itemName = data.item?.displayname || data.item?.displayName || 'Item';
+          if (data.addedToShoppingList) {
+            showStatus(`🗑 Depleted: ${itemName} hit 0 — Auto-added to Shopping List! 📋`, 'error');
+            loadShoppingListCount();
+          } else {
+            showStatus(`🗑 Consumed: -1 ${itemName} (${data.newTotal} remaining)`, 'success');
+          }
+          renderActiveItem(data.item);
+          return;
+        }
+
+        // 2e. Open Food Facts Auto-Discovered Product
+        if (data.success && data.autoDiscovered && data.product) {
+          if (soundEnabled) audio.success();
+          showStatus(`✨ Discovered: ${data.product.product_name} via Open Food Facts!`, 'success');
+          openDiscoverDrawer(data.product);
+          return;
+        }
+
+        // 2f. Standard Item Found (e.g. in MOVE mode, or item needs location)
+        if (data.success && (data.data || data.item)) {
+          const item = data.data || data.item;
+          if (soundEnabled) audio.success();
+          showStatus('✓ Found: ' + (item.displayName || item.displayname || item.sku), 'success');
+          renderActiveItem(item);
+          return;
+        }
+
+        // 2g. Completely Unknown Barcode: Open manual registration
+        if (soundEnabled) audio.error();
+        showStatus('Unknown barcode: ' + clean + '. Opening registration...', 'error');
+        openRegisterDrawer(clean);
+      } catch (err) {
+        if (soundEnabled) audio.error();
+        showStatus('Network error during scan: ' + err.message, 'error');
+      }
+    }
+
+    function renderActiveItem(item) {
+      activeItem = item;
+      const card = document.getElementById('activeItemCard');
+      card.style.display = 'flex';
+
+      document.getElementById('itemDisplayName').textContent = item.displayName || item.displayname || item.sku;
+      document.getElementById('itemUpc').textContent = 'UPC / SKU: ' + (item.upc || item.sku);
+
+      // Photo or emoji
+      const photoEl = document.getElementById('itemPhoto');
+      const emojiEl = document.getElementById('itemEmoji');
+      if (item.image_url) {
+        photoEl.src = item.image_url;
+        photoEl.style.display = 'block';
+        emojiEl.style.display = 'none';
+      } else {
+        photoEl.style.display = 'none';
+        emojiEl.style.display = 'flex';
+        emojiEl.textContent = getItemIcon(item.sku || '');
+      }
+
+      // Location & Stock
+      const bins = Array.isArray(item.bins) ? item.bins : [];
+      const primaryBin = bins.find(b => b.qty_on_hand > 0) || bins[0];
+      const currentBinId = primaryBin ? primaryBin.bin_id : 'PANTRY-BOTTOM';
+      const currentQty = primaryBin ? primaryBin.qty_on_hand : 0;
+
+      document.getElementById('itemCurrentBinLabel').textContent = getFriendlyBinName(currentBinId);
+      document.getElementById('itemStockBadge').textContent = currentQty + ' on hand';
+
+      // Repopulate Destination options (excluding current source)
+      populateLocationSelects();
+
+      // Scroll card into view smoothly
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function getActiveItemSourceBin() {
+      if (!activeItem || !Array.isArray(activeItem.bins)) return 'PANTRY-BOTTOM';
+      const b = activeItem.bins.find(x => x.qty_on_hand > 0) || activeItem.bins[0];
+      return b ? b.bin_id : 'PANTRY-BOTTOM';
+    }
+
+    function dismissActiveItem() {
+      activeItem = null;
+      document.getElementById('activeItemCard').style.display = 'none';
+      showStatus('Ready to scan. Point at an item or door sticker.', 'info');
+    }
+
+    function switchMode(mode) {
+      currentMode = mode;
+      const tabMove = document.getElementById('tabMove');
+      const tabRestock = document.getElementById('tabRestock');
+      const panelMove = document.getElementById('panelMove');
+      const panelRestock = document.getElementById('panelRestock');
+
+      if (mode === 'move') {
+        tabMove.classList.add('active');
+        tabRestock.classList.remove('active');
+        panelMove.style.display = 'flex';
+        panelRestock.style.display = 'none';
+      } else {
+        tabMove.classList.remove('active');
+        tabRestock.classList.add('active');
+        panelMove.style.display = 'none';
+        panelRestock.style.display = 'flex';
+      }
+    }
+
+    function adjustQty(delta) {
+      const input = document.getElementById('moveQtyInput');
+      let val = Number(input.value) || 1;
+      val = Math.max(1, val + delta);
+      input.value = val;
+    }
+
+    function adjustRestockQty(delta) {
+      const input = document.getElementById('restockQtyInput');
+      let val = Number(input.value) || 1;
+      val = Math.max(1, val + delta);
+      input.value = val;
+    }
+
+    // --- Commit Move (Bin Transfer) ---
+    async function commitMove() {
+      if (!activeItem) return;
+      const fromBinId = getActiveItemSourceBin();
+      const toBinId = document.getElementById('destSelect').value;
+      const qty = Number(document.getElementById('moveQtyInput').value) || 1;
+
+      if (!toBinId || toBinId === fromBinId) {
+        showStatus('Please choose a different destination location.', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('btnCommitMove');
+      btn.disabled = true;
+      btn.innerHTML = '<span>SYNCING...</span>';
+
+      try {
+        const res = await fetch('/api/scanner/transfer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sku: activeItem.sku,
+            itemId: activeItem.itemId || activeItem.itemid,
+            fromBin: fromBinId,
+            toBin: toBinId,
+            qty: qty
+          })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          if (soundEnabled) audio.success();
+          showStatus('✓ Moved ' + qty + 'x ' + (activeItem.displayName || activeItem.sku) + ' to ' + getFriendlyBinName(toBinId), 'success');
+          // Reload updated item balances
+          const updated = await fetch('/api/scanner/lookup?barcode=' + encodeURIComponent(activeItem.upc || activeItem.sku));
+          const updatedData = await updated.json();
+          if (updatedData.success) {
+            renderActiveItem(updatedData.data);
+          }
+        } else {
+          if (soundEnabled) audio.error();
+          showStatus('Transfer failed: ' + (data.error || 'Unknown error'), 'error');
+        }
+      } catch (err) {
+        if (soundEnabled) audio.error();
+        showStatus('Network error: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>✓ MOVE TO LOCATION</span>';
+      }
+    }
+
+    // --- Commit Restock ---
+    async function commitRestock() {
+      if (!activeItem) return;
+      const binId = document.getElementById('restockSelect').value;
+      const qty = Number(document.getElementById('restockQtyInput').value) || 1;
+
+      if (!binId || qty <= 0) return;
+
+      const btn = document.getElementById('btnCommitRestock');
+      btn.disabled = true;
+      btn.innerHTML = '<span>ADDING...</span>';
+
+      try {
+        const res = await fetch('/api/scanner/items/' + (activeItem.itemId || activeItem.itemid) + '/stock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ binId: binId, qty: qty })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          if (soundEnabled) audio.success();
+          showStatus('✓ Added +' + qty + ' into ' + getFriendlyBinName(binId), 'success');
+          const updated = await fetch('/api/scanner/lookup?barcode=' + encodeURIComponent(activeItem.upc || activeItem.sku));
+          const updatedData = await updated.json();
+          if (updatedData.success) {
+            renderActiveItem(updatedData.data);
+          }
+        } else {
+          if (soundEnabled) audio.error();
+          showStatus('Could not add stock: ' + data.error, 'error');
+        }
+      } catch (err) {
+        if (soundEnabled) audio.error();
+        showStatus('Network error: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>＋ ADD STOCK TO LOCATION</span>';
+      }
+    }
+
+    // --- Register Item Drawer ---
+    function openRegisterDrawer(scannedCode = '') {
+      document.getElementById('regUpc').value = scannedCode;
+      document.getElementById('regName').value = '';
+      document.getElementById('regQty').value = '1';
+      regPhotoFile = null;
+      document.getElementById('regPhotoPreview').style.display = 'none';
+      document.getElementById('photoPickText').textContent = '📷 Take / Pick Photo';
+
+      document.getElementById('drawerBackdrop').classList.add('open');
+      document.getElementById('drawerCard').classList.add('open');
+    }
+
+    function closeRegisterDrawer() {
+      document.getElementById('drawerBackdrop').classList.remove('open');
+      document.getElementById('drawerCard').classList.remove('open');
+    }
+
+    function handleRegPhoto(event) {
+      const file = event.target.files && event.target.files[0];
+      if (file) {
+        regPhotoFile = file;
+        const preview = document.getElementById('regPhotoPreview');
+        preview.src = URL.createObjectURL(file);
+        preview.style.display = 'block';
+        document.getElementById('photoPickText').textContent = '🔄 Change Photo';
+      }
+    }
+
+    async function submitRegisterItem() {
+      const upc = document.getElementById('regUpc').value.trim();
+      const name = document.getElementById('regName').value.trim();
+      const binId = document.getElementById('regLocationSelect').value;
+      const qty = Number(document.getElementById('regQty').value) || 1;
+
+      if (!name) {
+        alert('Please enter an item name');
+        return;
+      }
+
+      showStatus('Saving ' + name + '...', 'info');
+
+      try {
+        let imageUrl = null;
+        if (regPhotoFile) {
+          const formData = new FormData();
+          formData.append('image', regPhotoFile);
+          const uploadRes = await fetch('/api/scanner/upload-image', { method: 'POST', body: formData });
+          const uploadData = await uploadRes.json();
+          if (uploadData.success) {
+            imageUrl = uploadData.imageUrl;
+          }
+        }
+
+        const res = await fetch('/api/scanner/items', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sku: upc ? ('SKU-' + upc.slice(-6)) : ('SKU-' + Date.now().toString().slice(-6)),
+            displayname: name,
+            upc: upc || null,
+            binId: binId,
+            quantity: qty,
+            imageUrl: imageUrl,
+            itemType: 'GroceryItem'
+          })
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          closeRegisterDrawer();
+          if (soundEnabled) audio.success();
+          showStatus('✓ Saved & Stored: ' + name + ' in ' + getFriendlyBinName(binId), 'success');
+          // Automatically display the newly registered item
+          const lookup = await fetch('/api/scanner/lookup?barcode=' + encodeURIComponent(upc || data.item.sku));
+          const lookupData = await lookup.json();
+          if (lookupData.success) {
+            renderActiveItem(lookupData.data);
+          }
+        } else {
+          showStatus('Error registering item: ' + data.error, 'error');
+        }
+      } catch (err) {
+        showStatus('Network error: ' + err.message, 'error');
+      }
+    }
+
+    function getItemIcon(sku) {
+      if (!sku) return '📦';
+      const s = sku.toUpperCase();
+      if (s.includes('KETCHUP')) return '🥫';
+      if (s.includes('OAT')) return '🥣';
+      if (s.includes('PEANUT') || s.includes('PB')) return '🥜';
+      if (s.includes('SOUP')) return '🍲';
+      if (s.includes('SRIRACHA') || s.includes('CHILI')) return '🌶';
+      if (s.includes('MILK') || s.includes('NIDO')) return '🥛';
+      return '📦';
+    }
+
+    // --- Open Food Facts Auto-Discovery Drawer ---
+    function openDiscoverDrawer(product) {
+      discoveredProduct = product;
+      const title = product.displayName || product.product_name || 'Discovered Item';
+      const barcode = product.upc || product.barcode || '';
+      const imageUrl = product.imageUrl || product.image_url || null;
+
+      document.getElementById('discoverTitle').textContent = title;
+      document.getElementById('discoverBrand').textContent = product.brand ? ('Brand: ' + product.brand) : 'Brand: Unknown';
+      document.getElementById('discoverBarcode').textContent = 'UPC: ' + barcode;
+
+      const imgEl = document.getElementById('discoverImg');
+      const emojiEl = document.getElementById('discoverEmoji');
+      if (imageUrl) {
+        imgEl.src = imageUrl;
+        imgEl.style.display = 'block';
+        emojiEl.style.display = 'none';
+      } else {
+        imgEl.style.display = 'none';
+        emojiEl.style.display = 'flex';
+      }
+
+      // Populate location select
+      const locSel = document.getElementById('discoverLocationSelect');
+      locSel.innerHTML = allBins.map(b => `<option value="${b.binnumber}">${getFriendlyBinName(b.binnumber)}</option>`).join('');
+      locSel.value = 'PANTRY-BOTTOM';
+
+      // Set store
+      const storeSel = document.getElementById('discoverStoreSelect');
+      if (storeSel) storeSel.value = activeStore;
+
+      document.getElementById('discoverBackdrop').classList.add('open');
+      document.getElementById('discoverCard').classList.add('open');
+    }
+
+    function closeDiscoverDrawer() {
+      document.getElementById('discoverBackdrop').classList.remove('open');
+      document.getElementById('discoverCard').classList.remove('open');
+      discoveredProduct = null;
+    }
+
+    async function confirmDiscoverItem() {
+      if (!discoveredProduct) return;
+      const defaultBin = document.getElementById('discoverLocationSelect').value;
+      const store = document.getElementById('discoverStoreSelect').value;
+      const title = discoveredProduct.displayName || discoveredProduct.product_name;
+      const barcode = discoveredProduct.upc || discoveredProduct.barcode;
+      const imageUrl = discoveredProduct.imageUrl || discoveredProduct.image_url || null;
+
+      const btn = document.getElementById('btnConfirmDiscover');
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+
+      try {
+        const res = await fetch('/api/scanner/items', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            displayname: title,
+            upc: barcode,
+            notes: discoveredProduct.brand ? `Brand: ${discoveredProduct.brand}` : null,
+            default_bin_id: defaultBin,
+            store: store,
+            image_url: imageUrl,
+            initialQty: 1
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          closeDiscoverDrawer();
+          if (soundEnabled) audio.success();
+          showStatus(`✓ Intake: +1 ${title} into ${getFriendlyBinName(defaultBin)}`, 'success');
+          const lookup = await fetch(`/api/scanner/lookup?barcode=${encodeURIComponent(barcode)}`);
+          const lookupData = await lookup.json();
+          if (lookupData.success) {
+            renderActiveItem(lookupData.data);
+          }
+        } else {
+          showStatus('Failed to save item: ' + data.error, 'error');
+        }
+      } catch (err) {
+        showStatus('Error saving item: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '✓ Save Default & Intake (+1)';
+      }
+    }
+
+    // --- Shopping List Functions ---
+    async function loadShoppingListCount() {
+      try {
+        const res = await fetch('/api/scanner/shopping-list');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.shoppingList)) {
+          const badge = document.getElementById('shoppingCount');
+          if (badge) badge.textContent = data.shoppingList.length;
+        }
+      } catch (_) {}
+    }
+
+    async function openShoppingDrawer() {
+      try {
+        const res = await fetch('/api/scanner/shopping-list');
+        const data = await res.json();
+        if (data.success) {
+          renderShoppingListItems(data.shoppingList || []);
+          document.getElementById('shoppingBackdrop').classList.add('open');
+          document.getElementById('shoppingCard').classList.add('open');
+        }
+      } catch (e) {
+        showStatus('Could not load shopping list: ' + e.message, 'error');
+      }
+    }
+
+    function closeShoppingDrawer() {
+      document.getElementById('shoppingBackdrop').classList.remove('open');
+      document.getElementById('shoppingCard').classList.remove('open');
+    }
+
+    function esc(v) {
+      return String(v ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[c]));
+    }
+
+    function renderShoppingListItems(items) {
+      const container = document.getElementById('shoppingListContainer');
+      const badge = document.getElementById('shoppingCount');
+      if (badge) badge.textContent = items.length;
+
+      if (!items || items.length === 0) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 1.5rem; color: #64748b; font-size: 0.85rem;">
+            🛒 No depleted items.<br>Items hitting 0 in Disposal mode are automatically queued here.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = items.map(item => `
+        <div class="shopping-item-card">
+          <div class="shopping-item-left">
+            ${item.image_url 
+              ? `<img src="${esc(item.image_url)}" class="shopping-item-img" alt="">`
+              : `<div class="shopping-item-img" style="display:flex;align-items:center;justify-content:center;font-size:1.3rem;">📦</div>`
+            }
+            <div class="shopping-item-info">
+              <div class="shopping-item-name">${esc(item.displayname)}</div>
+              <div class="shopping-item-meta">
+                ${item.store ? `<span class="shopping-store-tag">${esc(item.store)}</span>` : ''}
+                <span>${esc(getFriendlyBinName(item.default_bin_id || 'PANTRY-BOTTOM'))}</span>
+              </div>
+            </div>
+          </div>
+          <div class="shopping-item-actions">
+            <button class="btn-shop-restock" onclick="restockShoppingItem(${Number(item.id)})">✓ Restock (+1)</button>
+            <button class="btn-shop-del" onclick="deleteShoppingItem(${Number(item.id)})">✕</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function restockShoppingItem(id) {
+      try {
+        const res = await fetch(`/api/scanner/shopping-list/${id}/restock`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          if (soundEnabled) audio.success();
+          showStatus(data.message, 'success');
+          openShoppingDrawer();
+        }
+      } catch (err) {
+        showStatus('Restock error: ' + err.message, 'error');
+      }
+    }
+
+    async function deleteShoppingItem(id) {
+      try {
+        const res = await fetch(`/api/scanner/shopping-list/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+          openShoppingDrawer();
+        }
+      } catch (err) {
+        showStatus('Delete error: ' + err.message, 'error');
+      }
+    }
+
+    async function clearAllShoppingList() {
+      if (!confirm('Clear all items from shopping list?')) return;
+      try {
+        const res = await fetch('/api/scanner/shopping-list', { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+          openShoppingDrawer();
+          showStatus('Shopping list cleared', 'info');
+        }
+      } catch (err) {
+        showStatus('Clear error: ' + err.message, 'error');
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

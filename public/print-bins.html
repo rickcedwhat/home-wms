@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Location QR Labels — RF-SMART</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #f59e0b;
+      --primary-hover: #d97706;
+      --text: #0f172a;
+      --border: #cbd5e1;
+    }
+
+    body {
+      background: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color: #1e293b;
+      padding: 1.5rem;
+    }
+
+    /* Screen UI Controls (Hidden on Print) */
+    .controls-panel {
+      max-width: 800px;
+      margin: 0 auto 1.5rem auto;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    .header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+    }
+
+    h1 {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .subtitle {
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-top: 0.2rem;
+    }
+
+    .actions-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .btn-print {
+      background: var(--primary);
+      color: #000;
+      font-weight: 700;
+      font-size: 0.95rem;
+      padding: 0.65rem 1.4rem;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      box-shadow: 0 2px 6px rgba(245, 158, 11, 0.3);
+      transition: all 0.15s;
+    }
+
+    .btn-print:hover {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: #f1f5f9;
+      color: #334155;
+      border: 1px solid #cbd5e1;
+      padding: 0.55rem 0.9rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .btn-secondary:hover {
+      background: #e2e8f0;
+    }
+
+    /* Filters Row */
+    .filter-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+      flex-wrap: wrap;
+      padding-top: 0.75rem;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    .filter-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .filter-btn {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      padding: 0.35rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: #475569;
+      transition: all 0.15s;
+    }
+
+    .filter-btn:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+
+    .filter-btn.active {
+      background: #0f172a;
+      border-color: #0f172a;
+      color: #ffffff;
+    }
+
+    .tip-box {
+      margin-top: 0.85rem;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1e40af;
+      padding: 0.55rem 0.85rem;
+      border-radius: 6px;
+      font-size: 0.78rem;
+    }
+
+    /* Grid of Printable Cutouts */
+    .label-sheet-container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .label-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      justify-content: center;
+    }
+
+    /* Minimalist Human-Centric QR Cutout Card */
+    .label-card {
+      background: #ffffff;
+      border: 1.5px dashed #94a3b8;
+      border-radius: 10px;
+      padding: 0.85rem 0.85rem 0.65rem 0.85rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      position: relative;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s;
+      page-break-inside: avoid;
+      break-inside: avoid;
+      width: 175px;
+    }
+
+    .label-card.selected {
+      border: 2px solid #0f172a;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+    }
+
+    .label-card.deselected {
+      opacity: 0.3;
+      border-color: #e2e8f0;
+      background: #f8fafc;
+    }
+
+    .card-checkbox {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+      accent-color: #0f172a;
+    }
+
+    .cut-guide-tag {
+      position: absolute;
+      top: 4px;
+      right: 6px;
+      font-size: 0.65rem;
+      color: #94a3b8;
+    }
+
+    .qr-container {
+      background: #ffffff;
+      padding: 0.35rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .qr-container img, .qr-container canvas {
+      display: block;
+    }
+
+    .label-name {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: #0f172a;
+      text-align: center;
+      letter-spacing: -0.01em;
+      line-height: 1.2;
+    }
+
+    /* Print Media Styles */
+    @media print {
+      body {
+        background: #ffffff !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        color: #000000 !important;
+      }
+
+      .controls-panel, .card-checkbox, .cut-guide-tag {
+        display: none !important;
+      }
+
+      .label-sheet-container {
+        max-width: 100% !important;
+        margin: 0 !important;
+      }
+
+      .label-grid {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        justify-content: flex-start !important;
+        gap: 0.8cm !important;
+        padding: 0.5cm !important;
+      }
+
+      /* Hide deselected labels during print */
+      .label-card.deselected {
+        display: none !important;
+      }
+
+      .label-card {
+        border: 1.5px dashed #000 !important;
+        border-radius: 8px !important;
+        padding: 0.4cm 0.4cm 0.3cm 0.4cm !important;
+        width: 5.2cm !important;
+        box-shadow: none !important;
+        background: #fff !important;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+        gap: 0.25cm !important;
+      }
+
+      .label-name {
+        color: #000 !important;
+        font-size: 1.15rem !important;
+        font-weight: 800 !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Controls Panel (Screen only) -->
+  <div class="controls-panel">
+    <div class="header-row">
+      <div>
+        <h1>🖨 Location QR Labels</h1>
+        <p class="subtitle">Minimalist cutouts: Just the QR code and the location name.</p>
+      </div>
+      <div class="actions-bar">
+        <button class="btn-print" id="btnPrint" onclick="printLabels()">
+          🖨 Print Selected (<span id="selectedCount">2</span>)
+        </button>
+        <button class="btn-secondary" onclick="selectAll(true)">Select All</button>
+        <button class="btn-secondary" onclick="selectAll(false)">Clear</button>
+      </div>
+    </div>
+
+    <!-- Quick Filter Tabs -->
+    <div class="filter-row">
+      <span class="filter-label">Filter:</span>
+      <button class="filter-btn active" id="filterPantry" onclick="setFilter('pantry-doors')">
+        Pantry Doors Only (Top & Bottom)
+      </button>
+      <button class="filter-btn" id="filterKitchen" onclick="setFilter('kitchen')">
+        All Kitchen Locations
+      </button>
+      <button class="filter-btn" id="filterCommands" onclick="setFilter('commands')">
+        ⚡ Command Sheet (Modes & Stores)
+      </button>
+      <button class="filter-btn" id="filterAll" onclick="setFilter('all')">
+        All
+      </button>
+    </div>
+
+    <div class="tip-box">
+      💡 <strong>Scan Test:</strong> Point your phone camera directly at the QR code on your monitor to test it.
+    </div>
+  </div>
+
+  <!-- Label Grid Container -->
+  <div class="label-sheet-container">
+    <div class="label-grid" id="labelGrid">
+      <div style="padding: 2rem; color: #64748b;">Loading locations…</div>
+    </div>
+  </div>
+
+  <!-- QRCode.js library for clean 2D QR rendering -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <script>
+    let allBins = [];
+    let currentFilter = 'pantry-doors';
+    const selectedBinIds = new Set(['PANTRY-TOP', 'PANTRY-BOTTOM']);
+
+    const COMMAND_CARDS = [
+      { id: 'CMD-INTAKE', binnumber: 'CMD-INTAKE', qrData: 'CMD:MODE:INTAKE', label: 'Mode: Intake' },
+      { id: 'CMD-DISPOSE', binnumber: 'CMD-DISPOSE', qrData: 'CMD:MODE:DISPOSE', label: 'Mode: Disposal' },
+      { id: 'CMD-MOVE', binnumber: 'CMD-MOVE', qrData: 'CMD:MODE:MOVE', label: 'Mode: Move' },
+      { id: 'CMD-ALDI', binnumber: 'CMD-ALDI', qrData: 'CMD:STORE:ALDI', label: 'Store: Aldi' },
+      { id: 'CMD-WALMART', binnumber: 'CMD-WALMART', qrData: 'CMD:STORE:WALMART', label: 'Store: Walmart' },
+      { id: 'CMD-TRADERJOES', binnumber: 'CMD-TRADERJOES', qrData: 'CMD:STORE:TRADER_JOES', label: "Store: Trader Joe's" },
+      { id: 'CMD-COSTCO', binnumber: 'CMD-COSTCO', qrData: 'CMD:STORE:COSTCO', label: 'Store: Costco' },
+      { id: 'CMD-TARGET', binnumber: 'CMD-TARGET', qrData: 'CMD:STORE:TARGET', label: 'Store: Target' }
+    ];
+
+    function printLabels() {
+      if (typeof QRCode === 'undefined') {
+        alert('QRCode library failed to load. Please check your internet connection and reload before printing.');
+        return;
+      }
+      window.print();
+    }
+
+    async function init() {
+      try {
+        const res = await fetch('/api/scanner/bins');
+        const data = await res.json();
+        if (data.status === 'SUCCESS' && Array.isArray(data.data)) {
+          allBins = data.data;
+          renderLabels();
+        }
+      } catch (err) {
+        document.getElementById('labelGrid').innerHTML = '<div style="color:red">Failed to load bins: ' + err.message + '</div>';
+      }
+    }
+
+    function setFilter(filterType) {
+      currentFilter = filterType;
+      document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+      if (filterType === 'pantry-doors') {
+        document.getElementById('filterPantry').classList.add('active');
+        selectedBinIds.clear();
+        selectedBinIds.add('PANTRY-TOP');
+        selectedBinIds.add('PANTRY-BOTTOM');
+      } else if (filterType === 'kitchen') {
+        document.getElementById('filterKitchen').classList.add('active');
+        selectedBinIds.clear();
+        allBins.filter(b => b.aisle === 'Kitchen' || b.location_id === 'HOME-KITCHEN').forEach(b => selectedBinIds.add(b.binnumber));
+      } else if (filterType === 'commands') {
+        document.getElementById('filterCommands').classList.add('active');
+        selectedBinIds.clear();
+        COMMAND_CARDS.forEach(c => selectedBinIds.add(c.binnumber));
+      } else {
+        document.getElementById('filterAll').classList.add('active');
+        selectedBinIds.clear();
+        allBins.forEach(b => selectedBinIds.add(b.binnumber));
+      }
+      renderLabels();
+    }
+
+    function toggleSelectBin(binId) {
+      if (selectedBinIds.has(binId)) {
+        selectedBinIds.delete(binId);
+      } else {
+        selectedBinIds.add(binId);
+      }
+      updateSelectionUI();
+    }
+
+    function selectAll(state) {
+      const visibleBins = getFilteredBins();
+      visibleBins.forEach(b => {
+        if (state) selectedBinIds.add(b.binnumber);
+        else selectedBinIds.delete(b.binnumber);
+      });
+      updateSelectionUI();
+    }
+
+    function getFilteredBins() {
+      if (currentFilter === 'pantry-doors') {
+        return allBins.filter(b => b.binnumber === 'PANTRY-TOP' || b.binnumber === 'PANTRY-BOTTOM');
+      }
+      if (currentFilter === 'kitchen') {
+        return allBins.filter(b => b.aisle === 'Kitchen' || b.location_id === 'HOME-KITCHEN');
+      }
+      if (currentFilter === 'commands') {
+        return COMMAND_CARDS;
+      }
+      return allBins;
+    }
+
+    function updateSelectionUI() {
+      document.querySelectorAll('.label-card').forEach(card => {
+        const binId = card.getAttribute('data-bin-id');
+        const chk = card.querySelector('.card-checkbox');
+        const isSelected = selectedBinIds.has(binId);
+        if (chk) chk.checked = isSelected;
+        if (isSelected) {
+          card.classList.add('selected');
+          card.classList.remove('deselected');
+        } else {
+          card.classList.remove('selected');
+          card.classList.add('deselected');
+        }
+      });
+      document.getElementById('selectedCount').textContent = selectedBinIds.size;
+    }
+
+    function cleanDisplayName(bin) {
+      const raw = bin.display_label || bin.binnumber;
+      // Strip leading pictographic emoji if present, preserving ASCII digits (e.g. "2nd Shelf")
+      return raw.replace(/^(?:[\p{Extended_Pictographic}\uFE0F\u200D]+\s*)+/u, '').trim();
+    }
+
+    function renderLabels() {
+      const grid = document.getElementById('labelGrid');
+      grid.innerHTML = '';
+
+      if (typeof QRCode === 'undefined') {
+        grid.innerHTML = '<div style="padding: 1.5rem; color: #ef4444; font-weight: 700;">⚠️ QRCode library failed to load from CDN. Check internet connection and reload before printing.</div>';
+        return;
+      }
+
+      const binsToShow = getFilteredBins();
+
+      binsToShow.forEach(bin => {
+        const qrData = bin.qrData || bin.barcode || ('BIN-' + bin.binnumber);
+        const nameText = bin.label || cleanDisplayName(bin);
+        const isSelected = selectedBinIds.has(bin.binnumber);
+
+        const card = document.createElement('div');
+        card.className = 'label-card ' + (isSelected ? 'selected' : 'deselected');
+        card.setAttribute('data-bin-id', bin.binnumber);
+        card.onclick = (e) => {
+          if (e.target.tagName !== 'INPUT') toggleSelectBin(bin.binnumber);
+        };
+
+        // ZERO clutter: ONLY the QR code + human location/command name
+        card.innerHTML = `
+          <input type="checkbox" class="card-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleSelectBin('${bin.binnumber}')">
+          <span class="cut-guide-tag">✂</span>
+
+          <div class="qr-container">
+            <div id="qr-${bin.binnumber}"></div>
+          </div>
+
+          <div class="label-name">${nameText}</div>
+        `;
+
+        grid.appendChild(card);
+
+        // Generate clean, high-resolution QR code (120x120px)
+        setTimeout(() => {
+          try {
+            new QRCode(document.getElementById(`qr-${bin.binnumber}`), {
+              text: qrData,
+              width: 120,
+              height: 120,
+              colorDark: '#000000',
+              colorLight: '#ffffff',
+              correctLevel: QRCode.CorrectLevel.M
+            });
+          } catch (err) {
+            console.error('QRCode error for', qrData, err);
+          }
+        }, 0);
+      });
+
+      updateSelectionUI();
+    }
+
+    init();
+  </script>
+</body>
+</html>

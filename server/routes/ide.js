@@ -1,0 +1,356 @@
+/**
+ * RF-SMART Code Studio / In-Browser IDE API
+ * 
+ * Safely provides file tree listing and file contents for the code viewer.
+ */
+
+import express from 'express';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+
+const router = express.Router();
+
+// Allowlist of project files with architectural metadata
+const PROJECT_FILES = [
+  // 1. RF-SMART Node.js Middleware
+  {
+    path: 'server/index.js',
+    category: 'Node.js Middleware',
+    layer: 'MIDDLEWARE',
+    name: 'index.js',
+    language: 'javascript',
+    description: 'Express server entry point on port 7370, request logging, and route mounting.'
+  },
+  {
+    path: 'server/routes/scanner.js',
+    category: 'Node.js Middleware',
+    layer: 'MIDDLEWARE',
+    name: 'scanner.js',
+    language: 'javascript',
+    description: 'REST API routes for barcode lookup, bin transfers, cache invalidation, and ERP error normalization.'
+  },
+  {
+    path: 'server/routes/ide.js',
+    category: 'Node.js Middleware',
+    layer: 'MIDDLEWARE',
+    name: 'ide.js',
+    language: 'javascript',
+    description: 'Code Studio backend API providing directory trees, file source viewer, and symbol definitions.'
+  },
+  {
+    path: 'server/services/barcodeParser.js',
+    category: 'Node.js Middleware',
+    layer: 'MIDDLEWARE',
+    name: 'barcodeParser.js',
+    language: 'javascript',
+    description: 'Industrial barcode parser supporting SKUs, UPC-A, Bins, and composite GS1-128 Application Identifiers.'
+  },
+  {
+    path: 'server/services/cache.js',
+    category: 'Node.js Middleware',
+    layer: 'MIDDLEWARE',
+    name: 'cache.js',
+    language: 'javascript',
+    description: 'In-memory lookup buffer (<5ms response time) protecting NetSuite from 429 concurrency throttles.'
+  },
+  {
+    path: 'server/services/concurrencyManager.js',
+    category: 'Node.js Middleware',
+    layer: 'MIDDLEWARE',
+    name: 'concurrencyManager.js',
+    language: 'javascript',
+    description: 'Keyed asynchronous mutex locking to prevent race conditions during simultaneous warehouse scans.'
+  },
+  {
+    path: 'server/services/auth.js',
+    category: 'Node.js Middleware',
+    layer: 'MIDDLEWARE',
+    name: 'auth.js',
+    language: 'javascript',
+    description: 'NetSuite Token-Based Authentication (TBA) implementing RFC 5849 OAuth 1.0a HMAC-SHA256.'
+  },
+
+  // 2. Mock NetSuite SuiteScript 2.1
+  {
+    path: 'server/netsuite-mock/restlet.js',
+    category: 'Mock NetSuite SuiteScript 2.1',
+    layer: 'SUITESCRIPT',
+    name: 'restlet.js',
+    language: 'javascript',
+    description: 'Simulated SuiteScript 2.1 RESTlet AMD module (define([N/record, N/search])) with simulated ERP latency.'
+  },
+  {
+    path: 'server/netsuite-mock/nRecord.js',
+    category: 'Mock NetSuite SuiteScript 2.1',
+    layer: 'SUITESCRIPT',
+    name: 'nRecord.js',
+    language: 'javascript',
+    description: 'SuiteScript N/record implementation with dynamic sublist manipulation and atomic SQLite ledger updates.'
+  },
+  {
+    path: 'server/netsuite-mock/nSearch.js',
+    category: 'Mock NetSuite SuiteScript 2.1',
+    layer: 'SUITESCRIPT',
+    name: 'nSearch.js',
+    language: 'javascript',
+    description: 'SuiteScript N/search implementation querying items, bins, and balances with getRange().'
+  },
+  {
+    path: 'server/netsuite-mock/db.js',
+    category: 'Mock NetSuite SuiteScript 2.1',
+    layer: 'SUITESCRIPT',
+    name: 'db.js',
+    language: 'javascript',
+    description: 'Relational database schema and warehouse seed data powered by Node.js native SQLite (node:sqlite).'
+  },
+
+  // 3. Handheld Scanner Frontend
+  {
+    path: 'public/index.html',
+    category: 'Handheld Scanner (Knockout)',
+    layer: 'FRONTEND',
+    name: 'index.html',
+    language: 'markup',
+    description: 'Zebra TC52x rugged handheld scanner layout with Knockout.js MVVM data-bind attributes.'
+  },
+  {
+    path: 'public/app.js',
+    category: 'Handheld Scanner (Knockout)',
+    layer: 'FRONTEND',
+    name: 'app.js',
+    language: 'javascript',
+    description: 'Knockout.js ViewModel (ko.observable, ko.computed) and Web Audio API synthesizer for barcode chimes.'
+  },
+  {
+    path: 'public/styles.css',
+    category: 'Handheld Scanner (Knockout)',
+    layer: 'FRONTEND',
+    name: 'styles.css',
+    language: 'css',
+    description: 'Industrial warehouse scanner styling, tactile buttons, high-contrast dark theme, and visual flash effects.'
+  },
+
+  // 4. Code Studio Frontend
+  {
+    path: 'public/code.html',
+    category: 'Code Studio',
+    layer: 'STUDIO',
+    name: 'code.html',
+    language: 'markup',
+    description: 'In-browser Code Studio interface layout, editor tabs, and live test console.'
+  },
+  {
+    path: 'public/code.js',
+    category: 'Code Studio',
+    layer: 'STUDIO',
+    name: 'code.js',
+    language: 'javascript',
+    description: 'Directory tree renderer, syntax highlighting, Command-Click navigation, and live test runner.'
+  },
+  {
+    path: 'public/code.css',
+    category: 'Code Studio',
+    layer: 'STUDIO',
+    name: 'code.css',
+    language: 'css',
+    description: 'VS Code/GitHub dark theme styling for Code Studio and directory explorer.'
+  },
+
+  // 5. Automated Tests
+  {
+    path: 'test/scanner.test.js',
+    category: 'Automated Tests',
+    layer: 'TESTS',
+    name: 'scanner.test.js',
+    language: 'javascript',
+    description: '16 automated backend tests verifying parser, TBA auth, cache, concurrency mutex, and SuiteScript engine.'
+  },
+
+  // 6. Project & Documentation
+  {
+    path: 'GUIDE.md',
+    category: 'Documentation',
+    layer: 'DOCS',
+    name: 'GUIDE.md',
+    language: 'markdown',
+    description: 'Comprehensive walkthrough of the 6 backend architectural systems and interview talking points.'
+  },
+  {
+    path: 'package.json',
+    category: 'Project',
+    layer: 'CONFIG',
+    name: 'package.json',
+    language: 'json',
+    description: 'Project configuration, scripts, and runtime dependencies.'
+  },
+  {
+    path: 'README.md',
+    category: 'Documentation',
+    layer: 'DOCS',
+    name: 'README.md',
+    language: 'markdown',
+    description: 'Architecture blueprint, interview talking points, and setup instructions.'
+  },
+  {
+    path: 'HANDOFF.md',
+    category: 'Documentation',
+    layer: 'DOCS',
+    name: 'HANDOFF.md',
+    language: 'markdown',
+    description: 'Original architecture requirements and technology stack specification.'
+  }
+];
+
+/**
+ * GET /api/ide/files
+ * Returns the catalog of project files.
+ */
+router.get('/files', (req, res) => {
+  res.json({
+    success: true,
+    files: PROJECT_FILES
+  });
+});
+
+/**
+ * GET /api/ide/file?path=...
+ * Returns the source code for a requested project file.
+ */
+router.get('/file', async (req, res) => {
+  const reqPath = req.query.path;
+  if (!reqPath) {
+    return res.status(400).json({ success: false, error: 'Missing "path" query parameter' });
+  }
+
+  // Security check: ensure path is in allowlist
+  const fileMeta = PROJECT_FILES.find(f => f.path === reqPath);
+  if (!fileMeta) {
+    return res.status(403).json({ success: false, error: 'Access denied: File not in allowed project tree.' });
+  }
+
+  try {
+    const fullPath = path.resolve(PROJECT_ROOT, reqPath);
+    // Double-check path traversal
+    if (!fullPath.startsWith(PROJECT_ROOT)) {
+      return res.status(403).json({ success: false, error: 'Invalid file path' });
+    }
+
+    const content = await fs.readFile(fullPath, 'utf-8');
+    const lines = content.split('\n');
+
+    res.json({
+      success: true,
+      file: {
+        ...fileMeta,
+        content,
+        lineCount: lines.length,
+        byteSize: Buffer.byteLength(content, 'utf-8')
+      }
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: `Failed to read file: ${err.message}`
+    });
+  }
+});
+
+/**
+ * GET /api/ide/symbols
+ * Extracts all symbol definitions (functions, classes, constants) across the codebase
+ * to power Cmd+Click / Go-to-Definition navigation.
+ */
+router.get('/symbols', async (req, res) => {
+  try {
+    const symbols = [];
+
+    // Special SuiteScript virtual module shortcuts
+    symbols.push(
+      { name: 'N/record', file: 'server/netsuite-mock/nRecord.js', line: 1, kind: 'module', preview: "Mock NetSuite 'N/record' SuiteScript 2.1 module" },
+      { name: 'N/search', file: 'server/netsuite-mock/nSearch.js', line: 1, kind: 'module', preview: "Mock NetSuite 'N/search' SuiteScript 2.1 module" }
+    );
+
+    for (const fileMeta of PROJECT_FILES) {
+      if (!fileMeta.path.endsWith('.js')) continue;
+
+      const fullPath = path.resolve(PROJECT_ROOT, fileMeta.path);
+      let content;
+      try {
+        content = await fs.readFile(fullPath, 'utf-8');
+      } catch {
+        continue;
+      }
+      const lines = content.split('\n');
+
+      lines.forEach((lineText, idx) => {
+        const lineNum = idx + 1;
+        const trimmed = lineText.trim();
+
+        // 1. Functions: export function name( / function name( / async function name(
+        const fnMatch = trimmed.match(/^(?:export\s+)?(?:async\s+)?function\s+([A-Za-z0-9_$]+)/);
+        if (fnMatch) {
+          symbols.push({
+            name: fnMatch[1],
+            file: fileMeta.path,
+            line: lineNum,
+            kind: 'function',
+            preview: trimmed
+          });
+          return;
+        }
+
+        // 2. Classes: export class Name / class Name
+        const clsMatch = trimmed.match(/^(?:export\s+)?class\s+([A-Za-z0-9_$]+)/);
+        if (clsMatch) {
+          symbols.push({
+            name: clsMatch[1],
+            file: fileMeta.path,
+            line: lineNum,
+            kind: 'class',
+            preview: trimmed
+          });
+          return;
+        }
+
+        // 3. Exported Constants: export const Name =
+        const constMatch = trimmed.match(/^export\s+(?:const|let|var)\s+([A-Za-z0-9_$]+)/);
+        if (constMatch) {
+          symbols.push({
+            name: constMatch[1],
+            file: fileMeta.path,
+            line: lineNum,
+            kind: 'const',
+            preview: trimmed
+          });
+          return;
+        }
+
+        // 4. Router definitions: const router = express.Router()
+        const routerMatch = trimmed.match(/^(?:export\s+)?const\s+([A-Za-z0-9_$]+)\s*=\s*(?:express\.Router|new\s+[A-Za-z0-9_$]+)/);
+        if (routerMatch && !['router', 'app'].includes(routerMatch[1])) {
+          symbols.push({
+            name: routerMatch[1],
+            file: fileMeta.path,
+            line: lineNum,
+            kind: 'instance',
+            preview: trimmed
+          });
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      symbols
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+export default router;

@@ -1,0 +1,10 @@
+node_modules/
+*.log
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.DS_Store
+public/uploads/*
+!public/uploads/.gitkeep
+certs/
+*.pem

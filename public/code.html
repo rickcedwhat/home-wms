@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RF-SMART Code Studio</title>
+  <link rel="stylesheet" href="/code.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Prism.js Syntax Highlighting CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.css">
+</head>
+<body>
+  <div class="ide-container">
+    <!-- Top Navigation Bar -->
+    <header class="ide-header">
+      <div class="header-left">
+        <div class="brand-group">
+          <span class="brand-box">RF</span>
+          <span class="brand-title">Code Studio</span>
+        </div>
+        <div class="nav-history">
+          <button class="btn-hist font-mono" id="btnNavBack" title="Navigate Back" disabled>&larr;</button>
+          <button class="btn-hist font-mono" id="btnNavForward" title="Navigate Forward" disabled>&rarr;</button>
+        </div>
+        <span class="crumb-text font-mono" id="breadcrumbDisplay">RFSmart</span>
+        <span class="cmd-click-badge font-mono">⌘-Click to navigate</span>
+      </div>
+
+      <div class="header-right">
+        <button class="btn-top btn-guide" id="openGuideBtn" title="Interactive Backend Architecture Guide">📖 Architecture Guide</button>
+        <button class="btn-top" id="copyCodeBtn" title="Copy code">📋 Copy</button>
+        <button class="btn-top" id="togglePlaygroundBtn" title="Live API Console">⚡ Test API</button>
+        <a href="/" target="_blank" class="btn-top btn-launch" title="Open Mobile Scanner in side window">
+          📱 Scanner UI &nearr;
+        </a>
+      </div>
+    </header>
+
+    <!-- Interactive Architecture Guide Drawer -->
+    <div class="guide-backdrop" id="guideBackdrop"></div>
+    <div class="guide-drawer" id="guideDrawer">
+      <div class="guide-drawer-header">
+        <div class="guide-title-box">
+          <span class="brand-box">RF</span>
+          <h3>Backend Architecture & Code Guide</h3>
+        </div>
+        <button class="btn-close-guide" id="closeGuideBtn">&times;</button>
+      </div>
+
+      <div class="guide-drawer-content">
+        <div class="guide-hero-banner">
+          <p>Click any <strong>Jump to Code</strong> button below to instantly navigate to and highlight the exact file and line in the Code Studio.</p>
+        </div>
+
+        <!-- 1. Middleware -->
+        <div class="guide-card">
+          <div class="guide-card-header">
+            <span class="guide-num">1</span>
+            <h4>High-Speed Middleware & Request Pipeline</h4>
+          </div>
+          <p class="guide-summary">Acts as an enterprise buffer between thousands of rugged scanner scans and NetSuite cloud ERP, preventing 429 rate limit errors.</p>
+          <div class="guide-tags">
+            <span class="gtag">server/routes/scanner.js</span>
+            <span class="gtag">Latency &lt;5ms</span>
+            <span class="gtag">Error Normalization</span>
+          </div>
+          <div class="guide-actions">
+            <button class="btn-jump-code" data-file="server/routes/scanner.js" data-line="28">Jump to Lookup Route (:28)</button>
+            <button class="btn-jump-code" data-file="server/routes/scanner.js" data-line="77">Jump to Transfer Route (:77)</button>
+          </div>
+        </div>
+
+        <!-- 2. Token-Based Authentication -->
+        <div class="guide-card">
+          <div class="guide-card-header">
+            <span class="guide-num">2</span>
+            <h4>Token-Based Authentication (RFC 5849 OAuth 1.0a)</h4>
+          </div>
+          <p class="guide-summary">Generates HMAC-SHA256 signatures with nonce, timestamp, and consumer/token secrets for NetSuite RESTlets, eliminating stored passwords and preventing replay attacks.</p>
+          <div class="guide-tags">
+            <span class="gtag">server/services/auth.js</span>
+            <span class="gtag">OAuth 1.0a</span>
+            <span class="gtag">HMAC-SHA256</span>
+          </div>
+          <div class="guide-actions">
+            <button class="btn-jump-code" data-file="server/services/auth.js" data-line="25">Jump to generateAuthHeader() (:25)</button>
+            <button class="btn-jump-code" data-file="server/services/auth.js" data-line="89">Jump to validateAuthHeader() (:89)</button>
+          </div>
+        </div>
+
+        <!-- 3. Industrial GS1-128 Barcode Parser -->
+        <div class="guide-card">
+          <div class="guide-card-header">
+            <span class="guide-num">3</span>
+            <h4>Industrial GS1-128 & Barcode Parser</h4>
+          </div>
+          <p class="guide-summary">Parses composite warehouse barcodes containing Application Identifiers (AI 01 GTIN, AI 10 Lot, AI 30 Quantity) alongside standard UPC-A and Bin barcodes in a single scan.</p>
+          <div class="guide-tags">
+            <span class="gtag">server/services/barcodeParser.js</span>
+            <span class="gtag">GS1-128 AI</span>
+            <span class="gtag">UPC-A</span>
+            <span class="gtag">Bins</span>
+          </div>
+          <div class="guide-actions">
+            <button class="btn-jump-code" data-file="server/services/barcodeParser.js" data-line="32">Jump to parseBarcode() (:32)</button>
+          </div>
+        </div>
+
+        <!-- 4. In-Memory Caching & Surgical Invalidation -->
+        <div class="guide-card">
+          <div class="guide-card-header">
+            <span class="guide-num">4</span>
+            <h4>In-Memory Caching & Surgical Invalidation</h4>
+          </div>
+          <p class="guide-summary">Provides instant sub-5ms responses on repeated scans. When an inventory transfer occurs, only the affected item and bins are invalidated—leaving the rest of the cache warm.</p>
+          <div class="guide-tags">
+            <span class="gtag">server/services/cache.js</span>
+            <span class="gtag">Sub-5ms</span>
+            <span class="gtag">TTL</span>
+            <span class="gtag">Surgical Invalidation</span>
+          </div>
+          <div class="guide-actions">
+            <button class="btn-jump-code" data-file="server/services/cache.js" data-line="15">Jump to Cache Get/Set (:15)</button>
+            <button class="btn-jump-code" data-file="server/services/cache.js" data-line="65">Jump to Invalidation (:65)</button>
+          </div>
+        </div>
+
+        <!-- 5. Concurrency Keyed Mutex -->
+        <div class="guide-card">
+          <div class="guide-card-header">
+            <span class="guide-num">5</span>
+            <h4>Async Keyed Mutex (Race Condition Defense)</h4>
+          </div>
+          <p class="guide-summary">Locks simultaneous warehouse scans at the granular `item:bin` resource level, preventing double-pick race conditions and negative inventory while allowing parallel work on other bins.</p>
+          <div class="guide-tags">
+            <span class="gtag">server/services/concurrencyManager.js</span>
+            <span class="gtag">Promise Chaining</span>
+            <span class="gtag">FIFO Lock Queue</span>
+          </div>
+          <div class="guide-actions">
+            <button class="btn-jump-code" data-file="server/services/concurrencyManager.js" data-line="25">Jump to acquire() Lock (:25)</button>
+            <button class="btn-jump-code" data-file="server/services/concurrencyManager.js" data-line="62">Jump to runExclusive() (:62)</button>
+          </div>
+        </div>
+
+        <!-- 6. SuiteScript 2.1 & Dynamic Sublists -->
+        <div class="guide-card">
+          <div class="guide-card-header">
+            <span class="guide-num">6</span>
+            <h4>SuiteScript 2.1 RESTlet & Dynamic Sublists</h4>
+          </div>
+          <p class="guide-summary">Simulates NetSuite's official AMD architecture (define(['N/record', 'N/search'])). Implements dynamic mode sublist operations (selectNewLine, setCurrentSublistValue, commitLine, save) over SQLite.</p>
+          <div class="guide-tags">
+            <span class="gtag">server/netsuite-mock/restlet.js</span>
+            <span class="gtag">N/record</span>
+            <span class="gtag">Dynamic Sublists</span>
+          </div>
+          <div class="guide-actions">
+            <button class="btn-jump-code" data-file="server/netsuite-mock/restlet.js" data-line="20">Jump to RESTlet Handler (:20)</button>
+            <button class="btn-jump-code" data-file="server/netsuite-mock/nRecord.js" data-line="35">Jump to Dynamic Sublist Engine (:35)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Definition Hover Tooltip -->
+    <div id="defTooltip" class="def-tooltip font-mono">
+      <span class="tooltip-action">⌘+Click</span> to jump to <span id="tooltipTarget" class="tooltip-target"></span>
+    </div>
+
+    <!-- Workspace -->
+    <div class="ide-workspace">
+      <!-- Minimalist File Explorer -->
+      <aside class="ide-sidebar">
+        <div class="sidebar-top">
+          <span class="sidebar-heading">EXPLORER</span>
+          <span class="file-count font-mono" id="filesCountBadge">0 files</span>
+        </div>
+
+        <div class="filter-box">
+          <input type="text" id="fileSearchInput" placeholder="Filter files..." autocomplete="off" />
+        </div>
+
+        <div class="tree-list" id="fileTreeContainer">
+          <!-- Dynamically populated via code.js -->
+        </div>
+      </aside>
+
+      <!-- Clean Editor Area -->
+      <main class="ide-editor-area">
+        <!-- Tabs Bar -->
+        <div class="editor-tabs" id="editorTabsBar">
+          <!-- Open tabs -->
+        </div>
+
+        <!-- 1-Line Info Strip -->
+        <div class="file-info-strip" id="fileInfoStrip">
+          <span class="info-layer font-mono" id="contextLayerBadge">MIDDLEWARE</span>
+          <span class="info-desc" id="contextFileDesc">Loading...</span>
+        </div>
+
+        <!-- Code Viewer with Line Numbers -->
+        <div class="editor-viewport">
+          <div class="loading-veil" id="loadingOverlay">
+            <div class="spinner"></div>
+          </div>
+          <pre class="line-numbers"><code id="codeViewer" class="language-javascript">// Loading file...</code></pre>
+        </div>
+
+        <!-- Collapsible API Test Console (Collapsed by default) -->
+        <div class="playground-drawer collapsed" id="playgroundDrawer">
+          <div class="drawer-bar" id="drawerBar">
+            <div class="drawer-title font-mono">
+              <span class="dot-green"></span>
+              <span>Live Test Console (Port 7370)</span>
+            </div>
+            <button class="drawer-toggle-btn" id="closeDrawerBtn">&times;</button>
+          </div>
+
+          <div class="drawer-body">
+            <div class="drawer-controls">
+              <div class="input-inline">
+                <input type="text" id="testBarcodeInput" value="SKU-1001" placeholder="Enter barcode..." class="font-mono" />
+                <button class="btn-run" id="runLookupTestBtn">Run Lookup</button>
+              </div>
+
+              <div class="quick-chips">
+                <button class="chip font-mono" data-barcode="SKU-1001">SKU-1001</button>
+                <button class="chip font-mono" data-barcode="SKU-1002">SKU-1002</button>
+                <button class="chip font-mono" data-barcode="(01)00012345678901(30)5">GS1 AI</button>
+                <button class="chip font-mono" data-barcode="INVALID-999">404 Test</button>
+              </div>
+            </div>
+
+            <div class="drawer-output">
+              <div class="output-status-line">
+                <span class="status-chip font-mono" id="resStatusBadge">IDLE</span>
+                <span class="latency-text font-mono" id="resLatencyDisplay">Latency: --</span>
+                <span class="tba-text font-mono" id="resTbaDisplay">TBA: --</span>
+              </div>
+              <pre class="output-text font-mono" id="resBodyDisplay">// Click "Run Lookup" to inspect live response</pre>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Prism.js Scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markdown.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+
+  <script src="/code.js"></script>
+</body>
+</html>
