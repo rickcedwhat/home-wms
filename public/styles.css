@@ -1752,6 +1752,14 @@ body {
   .mobile-hidden {
     display: none !important;
   }
+
+  .scanner-input,
+  .form-input,
+  .form-select,
+  .qty-field,
+  .clean-select {
+    font-size: 16px;
+  }
 }
 
 /* Primary Camera Snap Button (for browsers without live getUserMedia WebRTC) */

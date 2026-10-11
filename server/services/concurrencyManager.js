@@ -18,27 +18,36 @@ class AsyncKeyedMutex {
     const prev = this.queues.get(key) || Promise.resolve();
     let releaseLock;
 
-    const currentPromise = new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error(`LOCK_TIMEOUT: Failed to acquire lock for key "${key}" within ${timeoutMs}ms`));
-      }, timeoutMs);
-
-      releaseLock = () => {
-        clearTimeout(timer);
-        resolve();
-      };
+    const currentPromise = new Promise((resolve) => {
+      releaseLock = resolve;
     });
 
     const tailPromise = prev.then(() => currentPromise);
     this.queues.set(key, tailPromise);
 
-    tailPromise.finally(() => {
+    tailPromise.then(() => {
       if (this.queues.get(key) === tailPromise) {
         this.queues.delete(key);
       }
     });
 
-    await prev;
+    let timer;
+    const timeoutPromise = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(`LOCK_TIMEOUT: Failed to acquire lock for key "${key}" within ${timeoutMs}ms`));
+      }, timeoutMs);
+    });
+
+    try {
+      await Promise.race([prev, timeoutPromise]);
+    } catch (err) {
+      // Release our queued slot once prev finishes so subsequent waiters are not blocked
+      prev.then(() => releaseLock());
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+
     return releaseLock;
   }
 

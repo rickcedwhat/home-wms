@@ -29,11 +29,20 @@ const __dirname = path.dirname(__filename);
 const UPLOADS_DIR = path.join(__dirname, '..', '..', 'public', 'uploads');
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-// Multer storage: save images to public/uploads with original extension
+const ALLOWED_IMAGE_TYPES = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+  'image/heic': '.heic',
+  'image/heif': '.heif'
+};
+
+// Multer storage: save images to public/uploads with safe MIME-derived extension
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOADS_DIR),
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname) || '.jpg';
+    const ext = ALLOWED_IMAGE_TYPES[file.mimetype] || '.jpg';
     const uniqueName = `item-${Date.now()}-${Math.floor(Math.random() * 1000)}${ext}`;
     cb(null, uniqueName);
   }
@@ -43,8 +52,8 @@ const upload = multer({
   storage,
   limits: { fileSize: 8 * 1024 * 1024 }, // 8MB
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) cb(null, true);
-    else cb(new Error('Only images allowed'));
+    if (ALLOWED_IMAGE_TYPES[file.mimetype]) cb(null, true);
+    else cb(new Error('Only raster image formats (JPEG, PNG, WebP, GIF, HEIC) are allowed'));
   }
 });
 
@@ -89,223 +98,232 @@ router.get('/lookup', async (req, res) => {
     });
   }
 
-  // 1a. Command Barcode Interceptor (Mode switch: INTAKE, DISPOSE, TRANSFER | Store select: ALDI, WALMART, etc.)
-  const cleanStr = String(rawBarcode).trim();
-  if (cleanStr.startsWith('CMD:')) {
-    const parts = cleanStr.split(':');
-    const category = (parts[1] || '').toUpperCase();
-    const action = (parts[2] || '').toUpperCase();
-    playServerSound('transfer');
+  try {
+    // 1a. Command Barcode Interceptor (Mode switch: INTAKE, DISPOSE, TRANSFER | Store select: ALDI, WALMART, etc.)
+    const cleanStr = String(rawBarcode).trim();
+    if (cleanStr.startsWith('CMD:')) {
+      const parts = cleanStr.split(':');
+      const category = (parts[1] || '').toUpperCase();
+      const action = (parts[2] || '').toUpperCase();
+      playServerSound('transfer');
 
-    return res.json({
-      success: true,
-      isCommand: true,
-      category,
-      action,
-      code: cleanStr,
-      latencyMs: Date.now() - startTime
-    });
-  }
-
-  // 1. Parse barcode (extract SKU, UPC, or GS1 Application Identifiers)
-  const parsed = parseBarcode(rawBarcode);
-
-  // 1b. Check if barcode represents a Location / Bin (door sticker or warehouse bin)
-  const db = getDatabase(false);
-  const cleanId = String(rawBarcode).trim();
-  const cleanUpper = cleanId.toUpperCase();
-  const strippedUpper = cleanUpper.replace(/^BIN-/, '');
-
-  let foundBin = db.prepare(`
-    SELECT * FROM bins 
-    WHERE UPPER(binnumber) = ? 
-       OR UPPER(binnumber) = ? 
-       OR UPPER(barcode) = ? 
-       OR UPPER(barcode) = ?
-  `).get(cleanUpper, strippedUpper, cleanUpper, 'BIN-' + strippedUpper);
-
-  // Fuzzy location fallback in case barcode was partially read or shortened
-  if (!foundBin) {
-    if (cleanUpper.includes('PANTRY') && (cleanUpper.includes('BOT') || cleanUpper.includes('LOW'))) {
-      foundBin = db.prepare("SELECT * FROM bins WHERE binnumber = 'PANTRY-BOTTOM'").get();
-    } else if (cleanUpper.includes('PANTRY') && (cleanUpper.includes('TOP') || cleanUpper.includes('HIGH') || cleanUpper.includes('UP'))) {
-      foundBin = db.prepare("SELECT * FROM bins WHERE binnumber = 'PANTRY-TOP'").get();
-    } else if (cleanUpper === 'PANTRY' || cleanUpper === 'BIN-PANTRY') {
-      foundBin = db.prepare("SELECT * FROM bins WHERE binnumber = 'PANTRY'").get();
-    } else if (cleanUpper.startsWith('BIN-')) {
-      foundBin = db.prepare("SELECT * FROM bins WHERE UPPER(binnumber) = ? OR UPPER(barcode) = ?").get(strippedUpper, cleanUpper);
+      return res.json({
+        success: true,
+        isCommand: true,
+        category,
+        action,
+        code: cleanStr,
+        latencyMs: Date.now() - startTime
+      });
     }
-  }
 
-  if (foundBin) {
-    playServerSound('location');
-    const latencyMs = Date.now() - startTime;
-    return res.json({
-      success: true,
-      isBin: true,
-      source: 'DATABASE',
-      latencyMs,
-      parsedBarcode: parsed,
-      bin: foundBin
-    });
-  }
+    // 1. Parse barcode (extract SKU, UPC, or GS1 Application Identifiers)
+    const parsed = parseBarcode(rawBarcode);
 
-  // Optional scanning mode parameters
-  const scanMode = (req.query.mode || '').toUpperCase();
-  const activeStore = req.query.store || 'Aldi';
+    // 1b. Check if barcode represents a Location / Bin (door sticker or warehouse bin)
+    const db = getDatabase(false);
+    const cleanId = String(rawBarcode).trim();
+    const cleanUpper = cleanId.toUpperCase();
+    const strippedUpper = cleanUpper.replace(/^BIN-/, '');
 
-  // Helper function to handle Intake or Disposal automated workflows
-  function handleModeWorkflows(itemData) {
-    if (!itemData) return null;
+    let foundBin = db.prepare(`
+      SELECT * FROM bins 
+      WHERE UPPER(binnumber) = ? 
+         OR UPPER(binnumber) = ? 
+         OR UPPER(barcode) = ? 
+         OR UPPER(barcode) = ?
+    `).get(cleanUpper, strippedUpper, cleanUpper, 'BIN-' + strippedUpper);
 
-    if (scanMode === 'INTAKE') {
-      const targetBin = itemData.default_bin_id || (itemData.bins && itemData.bins[0]?.bin_id);
-      if (targetBin) {
-        db.prepare(`
-          INSERT INTO inventory_balances (item_id, bin_id, qty_on_hand)
-          VALUES (?, ?, 1)
-          ON CONFLICT(item_id, bin_id) DO UPDATE SET qty_on_hand = qty_on_hand + 1
-        `).run(itemData.itemId || itemData.itemid, targetBin);
-
-        if (activeStore) {
-          db.prepare('UPDATE items SET store = ? WHERE itemid = ?').run(activeStore, itemData.itemId || itemData.itemid);
-        }
-
-        scanCache.invalidateByPattern((k, v) => v?.itemId === itemData.itemId || k === itemData.itemId);
-        playServerSound('transfer');
-
-        const newTotal = (itemData.totalQty || 0) + 1;
-        return {
-          success: true,
-          mode: 'INTAKE',
-          autoIncremented: true,
-          store: activeStore,
-          binId: targetBin,
-          newTotal,
-          item: { ...itemData, totalQty: newTotal, default_bin_id: targetBin, store: activeStore },
-          latencyMs: Date.now() - startTime
-        };
+    // Fuzzy location fallback in case barcode was partially read or shortened
+    if (!foundBin) {
+      if (cleanUpper.includes('PANTRY') && (cleanUpper.includes('BOT') || cleanUpper.includes('LOW'))) {
+        foundBin = db.prepare("SELECT * FROM bins WHERE binnumber = 'PANTRY-BOTTOM'").get();
+      } else if (cleanUpper.includes('PANTRY') && (cleanUpper.includes('TOP') || cleanUpper.includes('HIGH') || cleanUpper.includes('UP'))) {
+        foundBin = db.prepare("SELECT * FROM bins WHERE binnumber = 'PANTRY-TOP'").get();
+      } else if (cleanUpper === 'PANTRY' || cleanUpper === 'BIN-PANTRY') {
+        foundBin = db.prepare("SELECT * FROM bins WHERE binnumber = 'PANTRY'").get();
+      } else if (cleanUpper.startsWith('BIN-')) {
+        foundBin = db.prepare("SELECT * FROM bins WHERE UPPER(binnumber) = ? OR UPPER(barcode) = ?").get(strippedUpper, cleanUpper);
       }
-    } else if (scanMode === 'DISPOSE') {
-      const stockBin = (itemData.bins || []).find(b => b.qty_on_hand > 0);
-      if (stockBin) {
-        db.prepare(`
-          UPDATE inventory_balances SET qty_on_hand = MAX(0, qty_on_hand - 1)
-          WHERE item_id = ? AND bin_id = ?
-        `).run(itemData.itemId || itemData.itemid, stockBin.bin_id);
+    }
 
-        const newTotal = Math.max(0, (itemData.totalQty || 1) - 1);
-        let addedToShoppingList = false;
+    if (foundBin) {
+      playServerSound('location');
+      const latencyMs = Date.now() - startTime;
+      return res.json({
+        success: true,
+        isBin: true,
+        source: 'DATABASE',
+        latencyMs,
+        parsedBarcode: parsed,
+        bin: foundBin
+      });
+    }
 
-        if (newTotal === 0) {
+    // Optional scanning mode parameters
+    const scanMode = (req.query.mode || '').toUpperCase();
+    const activeStore = req.query.store || 'Aldi';
+
+    // Helper function to handle Intake or Disposal automated workflows
+    function handleModeWorkflows(itemData) {
+      if (!itemData) return null;
+
+      if (scanMode === 'INTAKE') {
+        const targetBin = itemData.default_bin_id || (itemData.bins && itemData.bins[0]?.bin_id);
+        const binExists = targetBin && db.prepare('SELECT 1 FROM bins WHERE binnumber = ?').get(targetBin);
+        if (binExists) {
           db.prepare(`
-            INSERT INTO shopping_list (item_id, needed_qty, store)
-            VALUES (?, 1, ?)
-          `).run(itemData.itemId || itemData.itemid, itemData.store || activeStore);
-          addedToShoppingList = true;
+            INSERT INTO inventory_balances (item_id, bin_id, qty_on_hand)
+            VALUES (?, ?, 1)
+            ON CONFLICT(item_id, bin_id) DO UPDATE SET qty_on_hand = qty_on_hand + 1
+          `).run(itemData.itemId || itemData.itemid, targetBin);
+
+          if (activeStore) {
+            db.prepare('UPDATE items SET store = ? WHERE itemid = ?').run(activeStore, itemData.itemId || itemData.itemid);
+          }
+
+          scanCache.invalidateByPattern((k, v) => v?.itemId === itemData.itemId || k === itemData.itemId);
+          playServerSound('transfer');
+
+          const newTotal = (itemData.totalQty || 0) + 1;
+          return {
+            success: true,
+            mode: 'INTAKE',
+            autoIncremented: true,
+            store: activeStore,
+            binId: targetBin,
+            newTotal,
+            item: { ...itemData, totalQty: newTotal, default_bin_id: targetBin, store: activeStore },
+            latencyMs: Date.now() - startTime
+          };
         }
+      } else if (scanMode === 'DISPOSE') {
+        const stockBin = (itemData.bins || []).find(b => b.qty_on_hand > 0);
+        if (stockBin) {
+          db.prepare(`
+            UPDATE inventory_balances SET qty_on_hand = MAX(0, qty_on_hand - 1)
+            WHERE item_id = ? AND bin_id = ?
+          `).run(itemData.itemId || itemData.itemid, stockBin.bin_id);
 
-        scanCache.invalidateByPattern((k, v) => v?.itemId === itemData.itemId || k === itemData.itemId);
-        playServerSound('transfer');
+          const newTotal = Math.max(0, (itemData.totalQty || 1) - 1);
+          let addedToShoppingList = false;
 
-        return {
-          success: true,
-          mode: 'DISPOSE',
-          autoDecremented: true,
-          binId: stockBin.bin_id,
-          newTotal,
-          addedToShoppingList,
-          item: { ...itemData, totalQty: newTotal },
-          latencyMs: Date.now() - startTime
-        };
+          if (newTotal === 0) {
+            db.prepare(`
+              INSERT INTO shopping_list (item_id, needed_qty, store)
+              VALUES (?, 1, ?)
+            `).run(itemData.itemId || itemData.itemid, itemData.store || activeStore);
+            addedToShoppingList = true;
+          }
+
+          scanCache.invalidateByPattern((k, v) => v?.itemId === itemData.itemId || k === itemData.itemId);
+          playServerSound('transfer');
+
+          return {
+            success: true,
+            mode: 'DISPOSE',
+            autoDecremented: true,
+            binId: stockBin.bin_id,
+            newTotal,
+            addedToShoppingList,
+            item: { ...itemData, totalQty: newTotal },
+            latencyMs: Date.now() - startTime
+          };
+        }
       }
+
+      return null;
     }
 
-    return null;
-  }
+    // 2. Check in-memory cache first for sub-5ms response
+    const cachedItem = scanCache.get(parsed.identifier);
+    if (cachedItem) {
+      const modeResult = handleModeWorkflows(cachedItem);
+      if (modeResult) return res.json(modeResult);
 
-  // 2. Check in-memory cache first for sub-5ms response
-  const cachedItem = scanCache.get(parsed.identifier);
-  if (cachedItem) {
-    const modeResult = handleModeWorkflows(cachedItem);
+      playServerSound('scan');
+      const latencyMs = Date.now() - startTime;
+      return res.json({
+        success: true,
+        source: 'CACHE',
+        latencyMs,
+        parsedBarcode: parsed,
+        data: cachedItem
+      });
+    }
+
+    // 3. Cache Miss: Sign request with NetSuite TBA (OAuth 1.0a)
+    const tba = generateTBAHeader('GET', 'https://restlet.netsuite.com/app/site/hosting/restlet.nl', {
+      action: 'lookup',
+      barcode: parsed.identifier
+    });
+
+    // 4. Invoke NetSuite RESTlet (simulates ~300ms ERP latency)
+    const restletResult = await restlet.get({
+      action: 'lookup',
+      barcode: parsed.identifier
+    });
+
+    const latencyMs = Date.now() - startTime;
+
+    if (restletResult.status === 'ERROR') {
+      // Check Open Food Facts before declaring unknown!
+      try {
+        console.log(`🌐 [OFF] Checking Open Food Facts for: "${parsed.identifier}"...`);
+        const offProduct = await lookupOpenFoodFacts(parsed.identifier);
+        if (offProduct) {
+          console.log(`✅ [OFF] Found: "${offProduct.displayName}" (brand: ${offProduct.brand})`);
+          playServerSound('scan');
+          return res.json({
+            success: true,
+            autoDiscovered: true,
+            product: offProduct,
+            latencyMs: Date.now() - startTime
+          });
+        } else {
+          console.log(`❌ [OFF] No product found on Open Food Facts for: "${parsed.identifier}"`);
+        }
+      } catch (offErr) {
+        console.log(`⚠️ [OFF] Error querying Open Food Facts: ${offErr.message}`);
+      }
+
+      playServerSound('error');
+      return res.status(404).json({
+        success: false,
+        source: 'NETSUITE_RESTLET',
+        latencyMs,
+        parsedBarcode: parsed,
+        tbaHeader: tba.header,
+        error: restletResult.error.message || 'Item not found in NetSuite ERP',
+        errorCode: restletResult.error.code
+      });
+    }
+
+    // 5. Populate cache with fresh ERP record
+    scanCache.set(parsed.identifier, restletResult.data);
+    if (restletResult.data.sku) scanCache.set(restletResult.data.sku, restletResult.data);
+    if (restletResult.data.upc) scanCache.set(restletResult.data.upc, restletResult.data);
+
+    const modeResult = handleModeWorkflows(restletResult.data);
     if (modeResult) return res.json(modeResult);
 
     playServerSound('scan');
-    const latencyMs = Date.now() - startTime;
     return res.json({
       success: true,
-      source: 'CACHE',
-      latencyMs,
-      parsedBarcode: parsed,
-      data: cachedItem
-    });
-  }
-
-  // 3. Cache Miss: Sign request with NetSuite TBA (OAuth 1.0a)
-  const tba = generateTBAHeader('GET', 'https://restlet.netsuite.com/app/site/hosting/restlet.nl', {
-    action: 'lookup',
-    barcode: parsed.identifier
-  });
-
-  // 4. Invoke NetSuite RESTlet (simulates ~300ms ERP latency)
-  const restletResult = await restlet.get({
-    action: 'lookup',
-    barcode: parsed.identifier
-  });
-
-  const latencyMs = Date.now() - startTime;
-
-  if (restletResult.status === 'ERROR') {
-    // Check Open Food Facts before declaring unknown!
-    try {
-      console.log(`🌐 [OFF] Checking Open Food Facts for: "${parsed.identifier}"...`);
-      const offProduct = await lookupOpenFoodFacts(parsed.identifier);
-      if (offProduct) {
-        console.log(`✅ [OFF] Found: "${offProduct.displayName}" (brand: ${offProduct.brand})`);
-        playServerSound('scan');
-        return res.json({
-          success: true,
-          autoDiscovered: true,
-          product: offProduct,
-          latencyMs: Date.now() - startTime
-        });
-      } else {
-        console.log(`❌ [OFF] No product found on Open Food Facts for: "${parsed.identifier}"`);
-      }
-    } catch (offErr) {
-      console.log(`⚠️ [OFF] Error querying Open Food Facts: ${offErr.message}`);
-    }
-
-    playServerSound('error');
-    return res.status(404).json({
-      success: false,
       source: 'NETSUITE_RESTLET',
       latencyMs,
       parsedBarcode: parsed,
       tbaHeader: tba.header,
-      error: restletResult.error.message || 'Item not found in NetSuite ERP',
-      errorCode: restletResult.error.code
+      tbaSignature: tba.signature,
+      data: restletResult.data
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      latencyMs: Date.now() - startTime,
+      error: err.message || 'Internal server error during barcode lookup'
     });
   }
-
-  // 5. Populate cache with fresh ERP record
-  scanCache.set(parsed.identifier, restletResult.data);
-  if (restletResult.data.sku) scanCache.set(restletResult.data.sku, restletResult.data);
-  if (restletResult.data.upc) scanCache.set(restletResult.data.upc, restletResult.data);
-
-  const modeResult = handleModeWorkflows(restletResult.data);
-  if (modeResult) return res.json(modeResult);
-
-  playServerSound('scan');
-  return res.json({
-    success: true,
-    source: 'NETSUITE_RESTLET',
-    latencyMs,
-    parsedBarcode: parsed,
-    tbaHeader: tba.header,
-    tbaSignature: tba.signature,
-    data: restletResult.data
-  });
 });
 
 /**
@@ -342,6 +360,16 @@ router.post('/items', (req, res) => {
   }
 
   const db = getDatabase();
+
+  if (default_bin_id) {
+    const binCheck = db.prepare('SELECT 1 FROM bins WHERE binnumber = ?').get(default_bin_id);
+    if (!binCheck) {
+      return res.status(422).json({
+        success: false,
+        error: `Location "${default_bin_id}" does not exist`
+      });
+    }
+  }
 
   // Check if UPC already exists
   const existing = db.prepare('SELECT itemid FROM items WHERE upc = ?').get(upc);
@@ -411,6 +439,11 @@ router.patch('/items/:id/default-bin', (req, res) => {
   }
 
   const db = getDatabase();
+  const binCheck = db.prepare('SELECT 1 FROM bins WHERE binnumber = ?').get(default_bin_id);
+  if (!binCheck) {
+    return res.status(422).json({ success: false, error: `Location "${default_bin_id}" does not exist` });
+  }
+
   const item = db.prepare('SELECT itemid FROM items WHERE itemid = ?').get(req.params.id);
   if (!item) {
     return res.status(404).json({ success: false, error: 'Item not found' });

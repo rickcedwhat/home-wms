@@ -169,8 +169,13 @@ class MockRecord {
               qty_on_hand = qty_on_hand + excluded.qty_on_hand
           `).run(itemId, toBin, quantity);
 
-          // 3. Insert into transfer_logs
-          transferSeq += 1;
+          // 3. Insert into transfer_logs (sync sequence with DB so restarts never collide)
+          const maxRow = db.prepare(`
+            SELECT MAX(CAST(SUBSTR(transfer_id, 9) AS INTEGER)) AS max_seq
+            FROM transfer_logs
+            WHERE transfer_id LIKE 'BT-____-%'
+          `).get();
+          transferSeq = Math.max(transferSeq, (maxRow && maxRow.max_seq) || 1000) + 1;
           const transferId = `BT-${new Date().getFullYear()}-${transferSeq}`;
           transferIds.push(transferId);
 

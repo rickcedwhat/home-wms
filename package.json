@@ -9,6 +9,9 @@
     "dev": "node --watch server/index.js",
     "test": "node --test"
   },
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "keywords": [
     "rfsmart",
     "netsuite",
@@ -18,7 +21,7 @@
     "express"
   ],
   "author": "Cedrick Catalan",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.21.2",

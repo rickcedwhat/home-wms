@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Kitchen Scanner — Mobile Terminal</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -145,7 +145,7 @@
       background: #0a0f17;
       border: 1px solid #253347;
       color: #f1f5f9;
-      font-size: 0.75rem;
+      font-size: 1rem;
       font-weight: 700;
       padding: 0.25rem 0.45rem;
       border-radius: 6px;
@@ -471,7 +471,7 @@
       color: #fff;
       padding: 0.5rem 0.75rem;
       border-radius: 7px;
-      font-size: 0.8rem;
+      font-size: 1rem;
       outline: none;
     }
 
@@ -643,7 +643,7 @@
       color: #fff;
       padding: 0.65rem 0.75rem;
       border-radius: 8px;
-      font-size: 0.88rem;
+      font-size: 1rem;
       font-weight: 600;
       outline: none;
       appearance: none;
@@ -793,7 +793,7 @@
       color: #fff;
       padding: 0.65rem 0.75rem;
       border-radius: 8px;
-      font-size: 0.9rem;
+      font-size: 1rem;
       outline: none;
     }
 
@@ -2052,6 +2052,16 @@
       document.getElementById('shoppingCard').classList.remove('open');
     }
 
+    function esc(v) {
+      return String(v ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[c]));
+    }
+
     function renderShoppingListItems(items) {
       const container = document.getElementById('shoppingListContainer');
       const badge = document.getElementById('shoppingCount');
@@ -2070,20 +2080,20 @@
         <div class="shopping-item-card">
           <div class="shopping-item-left">
             ${item.image_url 
-              ? `<img src="${item.image_url}" class="shopping-item-img" alt="">`
+              ? `<img src="${esc(item.image_url)}" class="shopping-item-img" alt="">`
               : `<div class="shopping-item-img" style="display:flex;align-items:center;justify-content:center;font-size:1.3rem;">📦</div>`
             }
             <div class="shopping-item-info">
-              <div class="shopping-item-name">${item.displayname}</div>
+              <div class="shopping-item-name">${esc(item.displayname)}</div>
               <div class="shopping-item-meta">
-                ${item.store ? `<span class="shopping-store-tag">${item.store}</span>` : ''}
-                <span>${getFriendlyBinName(item.default_bin_id || 'PANTRY-BOTTOM')}</span>
+                ${item.store ? `<span class="shopping-store-tag">${esc(item.store)}</span>` : ''}
+                <span>${esc(getFriendlyBinName(item.default_bin_id || 'PANTRY-BOTTOM'))}</span>
               </div>
             </div>
           </div>
           <div class="shopping-item-actions">
-            <button class="btn-shop-restock" onclick="restockShoppingItem(${item.id})">✓ Restock (+1)</button>
-            <button class="btn-shop-del" onclick="deleteShoppingItem(${item.id})">✕</button>
+            <button class="btn-shop-restock" onclick="restockShoppingItem(${Number(item.id)})">✓ Restock (+1)</button>
+            <button class="btn-shop-del" onclick="deleteShoppingItem(${Number(item.id)})">✕</button>
           </div>
         </div>
       `).join('');

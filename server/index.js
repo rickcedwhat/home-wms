@@ -24,8 +24,16 @@ const PORT = process.env.PORT || 7370;
 // Initialize mock NetSuite SQLite database (file-backed so items persist between restarts)
 getDatabase(false);
 
-// Middleware
-app.use(cors());
+// Middleware: Restrict CORS to localhost / local LAN origins
+app.use(cors({
+  origin: [
+    /^https?:\/\/localhost(:\d+)?$/,
+    /^https?:\/\/127\.0\.0\.1(:\d+)?$/,
+    /^https?:\/\/192\.168\.\d+\.\d+(:\d+)?$/,
+    /^https?:\/\/10\.\d+\.\d+\.\d+(:\d+)?$/,
+    /^https?:\/\/172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+(:\d+)?$/
+  ]
+}));
 app.use(express.json({ limit: '10mb' }));
 
 // Request logging for warehouse scan telemetry

@@ -294,7 +294,7 @@
         <p class="subtitle">Minimalist cutouts: Just the QR code and the location name.</p>
       </div>
       <div class="actions-bar">
-        <button class="btn-print" id="btnPrint" onclick="window.print()">
+        <button class="btn-print" id="btnPrint" onclick="printLabels()">
           🖨 Print Selected (<span id="selectedCount">2</span>)
         </button>
         <button class="btn-secondary" onclick="selectAll(true)">Select All</button>
@@ -349,6 +349,14 @@
       { id: 'CMD-COSTCO', binnumber: 'CMD-COSTCO', qrData: 'CMD:STORE:COSTCO', label: 'Store: Costco' },
       { id: 'CMD-TARGET', binnumber: 'CMD-TARGET', qrData: 'CMD:STORE:TARGET', label: 'Store: Target' }
     ];
+
+    function printLabels() {
+      if (typeof QRCode === 'undefined') {
+        alert('QRCode library failed to load. Please check your internet connection and reload before printing.');
+        return;
+      }
+      window.print();
+    }
 
     async function init() {
       try {
@@ -437,13 +445,19 @@
 
     function cleanDisplayName(bin) {
       const raw = bin.display_label || bin.binnumber;
-      // Strip leading emoji if present, keep pure human name e.g. "Pantry Bottom"
-      return raw.replace(/^[\p{Emoji}\s]+/u, '').trim();
+      // Strip leading pictographic emoji if present, preserving ASCII digits (e.g. "2nd Shelf")
+      return raw.replace(/^(?:[\p{Extended_Pictographic}\uFE0F\u200D]+\s*)+/u, '').trim();
     }
 
     function renderLabels() {
       const grid = document.getElementById('labelGrid');
       grid.innerHTML = '';
+
+      if (typeof QRCode === 'undefined') {
+        grid.innerHTML = '<div style="padding: 1.5rem; color: #ef4444; font-weight: 700;">⚠️ QRCode library failed to load from CDN. Check internet connection and reload before printing.</div>';
+        return;
+      }
+
       const binsToShow = getFilteredBins();
 
       binsToShow.forEach(bin => {

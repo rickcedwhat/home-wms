@@ -240,10 +240,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  let openRequestSeq = 0;
+
   // Open file in Editor
   async function openFile(filePath, targetLine = null, recordHistory = true) {
     const fileMeta = projectFiles.find(f => f.path === filePath);
     if (!fileMeta) return;
+
+    const requestId = ++openRequestSeq;
 
     // Track Navigation History
     if (recordHistory && !isNavigatingHistory) {
@@ -268,6 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const response = await fetch(`/api/ide/file?path=${encodeURIComponent(filePath)}`);
       const data = await response.json();
+      if (requestId !== openRequestSeq) return;
 
       if (data.success && data.file) {
         const file = data.file;
@@ -301,9 +306,12 @@ document.addEventListener('DOMContentLoaded', () => {
         codeViewer.textContent = `Error loading file: ${data.error || 'Unknown error'}`;
       }
     } catch (err) {
+      if (requestId !== openRequestSeq) return;
       codeViewer.textContent = `Failed to connect to server: ${err.message}`;
     } finally {
-      loadingOverlay.classList.remove('visible');
+      if (requestId === openRequestSeq) {
+        loadingOverlay.classList.remove('visible');
+      }
     }
   }
 

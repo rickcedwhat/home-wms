@@ -279,7 +279,12 @@ router.get('/symbols', async (req, res) => {
       if (!fileMeta.path.endsWith('.js')) continue;
 
       const fullPath = path.resolve(PROJECT_ROOT, fileMeta.path);
-      const content = await fs.readFile(fullPath, 'utf-8');
+      let content;
+      try {
+        content = await fs.readFile(fullPath, 'utf-8');
+      } catch {
+        continue;
+      }
       const lines = content.split('\n');
 
       lines.forEach((lineText, idx) => {

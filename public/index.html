@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>RF-SMART Mobile Data Capture & Storage Simulator</title>
@@ -226,11 +226,11 @@
                     <span class="stock-pill font-mono" data-bind="text: totalQty + ' total in stock'"></span>
                   </div>
                   <h3 class="item-display-name" data-bind="text: displayName"></h3>
-                  <!-- ko if: upc -->
-                  <span class="upc-sub font-mono">UPC: <strong data-bind="text: upc"></strong></span>
+                  <!-- ko if: $data.upc -->
+                  <span class="upc-sub font-mono">UPC: <strong data-bind="text: $data.upc"></strong></span>
                   <!-- /ko -->
-                  <!-- ko if: notes -->
-                  <p class="notes-sub" data-bind="text: notes"></p>
+                  <!-- ko if: $data.notes -->
+                  <p class="notes-sub" data-bind="text: $data.notes"></p>
                   <!-- /ko -->
                 </div>
               </div>
@@ -240,7 +240,7 @@
                 <span class="section-label">CURRENT LOCATIONS (TAP TO SELECT SOURCE):</span>
                 <div class="source-bins-list" data-bind="foreach: (typeof bins !== 'undefined' && Array.isArray(bins)) ? bins : []">
                   <button class="bin-select-btn font-mono" data-bind="click: function() { $root.selectSourceBin(bin_id); }, css: { 'selected': $root.fromBin() === bin_id }">
-                    <span class="bin-num" data-bind="text: display_label || bin_id"></span>
+                    <span class="bin-num" data-bind="text: $data.display_label || bin_id"></span>
                     <span class="bin-stock" data-bind="text: qty_on_hand + ' avail'"></span>
                   </button>
                 </div>

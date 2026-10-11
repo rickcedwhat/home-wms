@@ -916,6 +916,7 @@ function ScannerViewModel() {
     reader.onload = function(e) {
       const img = new Image();
       img.onload = async function() {
+        let detectedCode = null;
         try {
           // Scale to max dimension 1280px to optimize decode speed and avoid mobile memory limits
           const maxDim = 1280;
@@ -944,8 +945,7 @@ function ScannerViewModel() {
               const detector = new BarcodeDetector({ formats: formats });
               const codes = await detector.detect(canvas);
               if (codes && codes.length > 0) {
-                const raw = codes[0].rawValue;
-                self.scanDirect(raw);
+                detectedCode = codes[0].rawValue;
                 return;
               }
             } catch (_) {}
@@ -980,6 +980,10 @@ function ScannerViewModel() {
         } finally {
           self.isProcessing(false);
           event.target.value = '';
+        }
+
+        if (detectedCode) {
+          self.scanDirect(detectedCode);
         }
       };
       img.src = e.target.result;
@@ -1049,19 +1053,27 @@ function ScannerViewModel() {
       if (self.registerForm.fileObj) {
         const formData = new FormData();
         formData.append('image', self.registerForm.fileObj);
-        await fetch('/api/scanner/items/' + itemId + '/image', {
+        const imgRes = await fetch('/api/scanner/items/' + itemId + '/image', {
           method: 'POST',
           body: formData
         });
+        if (!imgRes.ok) {
+          console.warn('Photo upload failed for item', itemId);
+        }
       }
 
       // 3. Add initial inventory stock to location
       if (binId && quantity > 0) {
-        await fetch('/api/scanner/items/' + itemId + '/stock', {
+        const stockRes = await fetch('/api/scanner/items/' + itemId + '/stock', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ binId: binId, qty: quantity })
         });
+        const stockData = await stockRes.json().catch(() => ({}));
+        if (!stockRes.ok || !stockData.success) {
+          alert('Item registered, but initial stock could not be added: ' + (stockData.error || stockRes.statusText));
+          return;
+        }
       }
 
       self.closeRegisterModal();

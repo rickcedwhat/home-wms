@@ -46,9 +46,9 @@ The Node.js middleware acts as an enterprise shock absorber:
 4. Serializes concurrent operations on identical inventory resources.
 
 ### Key Code Paths
-- `POST /api/scanner/lookup` (`scanner.js:28`): Resolves raw scan strings (SKU, UPC, GS1-128) via cache or NetSuite RESTlet.
-- `POST /api/scanner/transfer` (`scanner.js:77`): Wraps inventory movements in an `AsyncKeyedMutex` lock, invokes NetSuite's `inventorytransfer` record, and surgically invalidates stale cache keys.
-- Error Normalization (`scanner.js:145`): Catches NetSuite SuiteScript error codes (`SSS_INVALID_RECORD_TYPE`, `INSUFFICIENT_PERMISSION`) and translates them into friendly, localized messages for warehouse floor operators.
+- `GET /api/scanner/lookup` (`scanner.js:80`): Resolves raw scan strings (SKU, UPC, GS1-128) via cache or NetSuite RESTlet.
+- `POST /api/scanner/transfer` (`scanner.js:560`): Wraps inventory movements in an `AsyncKeyedMutex` lock, invokes NetSuite's `bintransfer` record, and surgically invalidates stale cache keys.
+- Error Normalization (`scanner.js:696`): Catches NetSuite SuiteScript error codes (`INSUFFICIENT_INVENTORY_IN_BIN`, `INVALID_BIN_LOCATION`, `RECORD_LOCKED`) and translates them into friendly, localized messages for warehouse floor operators.
 
 ---
 
@@ -64,9 +64,8 @@ TBA ensures:
 - **Payload Integrity**: The HTTP method, URL, and OAuth parameters are concatenated into a strict signature base string and hashed using the consumer secret and token secret.
 
 ### Key Functions
-- `generateAuthHeader({ method, url })` (`auth.js:25`): Creates the `OAuth realm="1234567", oauth_consumer_key="...", oauth_signature="..."` header.
-- `generateSignatureBaseString(method, url, oauthParams)` (`auth.js:52`): RFC 5849 lexicographical sorting and percent-encoding of parameter keys and values.
-- `validateAuthHeader(authHeader, method, url)` (`auth.js:89`): Server-side validation verifying that the signature matches and the timestamp is within a 5-minute clock drift window.
+- `generateTBAHeader(method, baseUrl, queryParams)` (`auth.js:23`): Creates the `OAuth realm="...", oauth_consumer_key="...", oauth_signature="..."` header and signature metadata.
+- `verifyTBAHeader(headerString)` (`auth.js:84`): Server-side validation verifying that all required OAuth 1.0a parameters are present and the timestamp is within a 5-minute clock drift window.
 
 ---
 
@@ -100,11 +99,11 @@ When 50 warehouse workers scan the same fast-moving consumer goods (FMCG) item o
 Our in-memory caching engine achieves:
 - **Sub-5ms Lookups**: Reads directly from memory, providing instantaneous feedback on handheld scanners.
 - **TTL Expiration**: Configurable Time-To-Live (default 60 seconds) ensures data remains reasonably fresh.
-- **Surgical Invalidation**: When an inventory transfer occurs (`transferInventory`), the system does **not** flush the entire cache. It calculates the affected SKU and specifically purges `item:${sku}` and `bin:${sourceBin}` / `bin:${targetBin}`, leaving other unaffected cached inventory intact.
+- **Surgical Invalidation**: When an inventory transfer occurs, the system does **not** flush the entire cache. It specifically purges cached entries matching the affected `itemId` via `invalidateByPattern`, leaving other unaffected cached inventory intact.
 
 ### Key Functions
-- `cache.get(key)` / `cache.set(key, value, ttlMs)` (`cache.js:15-38`): Constant-time $O(1)$ lookups with automatic expiration checks.
-- `cache.invalidateItem(sku)` / `cache.invalidateBin(binName)` (`cache.js:65-79`): Targeted key purging after state changes.
+- `scanCache.get(key)` / `scanCache.set(key, value)` (`cache.js:23-49`): Constant-time $O(1)$ lookups with automatic expiration checks.
+- `scanCache.invalidateByPattern(predicate)` (`cache.js:61-70`): Targeted key purging after state changes.
 
 ---
 
@@ -118,15 +117,14 @@ Consider this classic warehouse race condition:
 - Simultaneously (within 50ms), Picker B scans `SKU-1001` to transfer **5 units** to `BIN-QC`.
 - Without serialization, both read 10 units available. Both attempt to transfer. The ledger enters a negative inventory state (-3 units) or crashes with an ERP concurrency lock exception.
 
-`AsyncKeyedMutex` locks operations per unique resource key (`item:SKU-1001:bin:BIN-A01`):
+`AsyncKeyedMutex` locks operations per unique resource key (`item:1001:bin:BIN-A01`):
 - Picker A acquires the lock; Picker B's operation is queued asynchronously.
 - Picker A's transfer completes (balance drops to 2 units).
-- Picker B's transfer runs next, sees only 2 units remaining, and returns a clean, user-friendly `INSUFFICIENT_INVENTORY` error.
+- Picker B's transfer runs next, sees only 2 units remaining, and returns a clean, user-friendly `INSUFFICIENT_INVENTORY_IN_BIN` error.
 - Pickers working on **different** items or bins operate fully in parallel without blocking each other.
 
 ### Key Functions
-- `acquire(key)` (`concurrencyManager.js:25`): Chains asynchronous promises to enforce FIFO execution per resource key.
-- `runExclusive(key, fn)` (`concurrencyManager.js:62`): Safe wrapper guaranteeing lock release inside a `finally` block even if an exception occurs.
+- `concurrencyMutex.acquire(key, timeoutMs)` (`concurrencyManager.js:17`): Chains asynchronous promises to enforce FIFO execution per resource key and returns a `releaseLock` callback to be invoked inside a `finally` block.
 
 ---
 

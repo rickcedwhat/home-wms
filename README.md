@@ -81,7 +81,7 @@ Control the scanner hands-free without touching your phone screen by scanning pr
 
 ## 🛠 Tech Stack
 
-- **Backend Runtime**: Node.js v22+ (Native `node:sqlite` DatabaseSync engine)
+- **Backend Runtime**: Node.js v22.13.0+ (Native `node:sqlite` DatabaseSync engine)
 - **Frontend (Mobile)**: Vanilla JavaScript + Web Audio API + ZXing Barcode Engine (served over local HTTPS for iOS/Android camera access)
 - **Frontend (Desktop Simulation)**: Knockout.js (MVVM architecture, observables, and computeds)
 - **External Data**: Open Food Facts REST API v2 + UPCItemDB API
@@ -92,7 +92,7 @@ Control the scanner hands-free without touching your phone screen by scanning pr
 ## 🚦 Getting Started
 
 ### Prerequisites
-- Node.js v22+ installed
+- Node.js v22.13.0+ installed
 - Phone and computer connected to the same local Wi-Fi network
 
 ### Installation & Launch
